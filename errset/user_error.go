@@ -1,4 +1,4 @@
-package user_error
+package errset
 
 import (
 	"encoding/json"
