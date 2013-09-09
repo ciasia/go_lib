@@ -31,6 +31,10 @@ func (s *ErrorSet) AddUser(user string) {
 	s.userErrors = append(s.userErrors, user)
 }
 
+func (s *ErrorSet) AddUserf(format string, params ...interface{}) {
+	s.userErrors = append(s.userErrors, fmt.Sprintf(format, params...))
+}
+
 func (s *ErrorSet) AddDirect(err error) {
 	if err != nil {
 		s.userErrors = append(s.userErrors, err.Error())
