@@ -22,6 +22,13 @@ func (bath *Bath) Connect() (*sql.DB, error) {
 	return db, nil
 }
 
+type Tenant struct {
+}
+
+type User struct {
+	Tenant *Tenant
+}
+
 type Connection struct {
 	db   *sql.DB
 	bath *Bath
