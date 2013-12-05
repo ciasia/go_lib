@@ -122,8 +122,6 @@ func (qc *QueryConditionWhere) GetConditionString(q *Query) (string, error) {
 		q.Dump()
 		return "", QueryUserError{"Cannot query on non mapped field '" + qc.Field + "'."}
 	}
-	_ = field
-	_ = ok
 
 	if qc.Cmp == "IN" {
 
@@ -151,7 +149,7 @@ func (qc *QueryConditionWhere) GetConditionString(q *Query) (string, error) {
 
 		escaped, err := field.field.ToDb(qc.Val)
 		if err != nil {
-			return "", err
+			return "", UserErrorF("%T.ToDb Error: %s", field.field, err.Error())
 		}
 		return fmt.Sprintf("%s.%s %s %s", field.table.alias, field.fieldNameInTable, qc.Cmp, escaped), nil
 	} else if qc.Cmp == "LIKE" {
@@ -176,7 +174,7 @@ func (q *Query) JoinConditionsWith(conditions []QueryCondition, joiner string) (
 		results[i], err = condition.GetConditionString(q)
 		//log.Println("Join %d/%d Done", i+1, len(conditions))
 		if err != nil {
-			log.Printf("Join Error %s", err)
+			log.Printf("Where Condition Error: %s", err)
 			return "", UserErrorF("building condition %d: %s", i, err.Error())
 		}
 	}

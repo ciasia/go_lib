@@ -375,7 +375,7 @@ func (q *Query) leftJoin(baseTable *MappedTable, prefixPath []string, path []str
 	if ok {
 		return existingDef, nil
 	} else {
-		includedCollection, err := q.includeCollection(tableIncludePath, refField.collection)
+		includedCollection, err := q.includeCollection(tableIncludePath, refField.Collection)
 		if err != nil {
 			return nil, err
 		}

@@ -102,7 +102,7 @@ func FieldFromDef(rawField map[string]interface{}) (Field, error) {
 		return nil, errors.New(fmt.Sprintf("%s", err.Error()))
 	}
 	if fieldType == nil {
-		return nil, errors.New(fmt.Sprintf("no 'type' specified"))
+		return nil, errors.New(fmt.Sprintf("no type specified"))
 	}
 	switch *fieldType {
 	case "string":
@@ -120,6 +120,9 @@ func FieldFromDef(rawField map[string]interface{}) (Field, error) {
 	case "datetime":
 		field = &FieldInt{}
 		field.Init(rawField)
+	case "date":
+		field = &FieldDate{}
+		field.Init(rawField)
 	case "int":
 		field = &FieldInt{}
 		field.Init(rawField)
@@ -135,11 +138,18 @@ func FieldFromDef(rawField map[string]interface{}) (Field, error) {
 	case "password":
 		field = &FieldPassword{}
 		field.Init(rawField)
+	case "file":
+		field = &FieldFile{}
+		field.Init(rawField)
 	case "enum":
+		field = &FieldString{}
+		field.Init(rawField)
 	case "auto_timestamp":
+		field = &FieldInt{}
+		field.Init(rawField)
 
 	default:
-		return nil, errors.New(fmt.Sprintf("Not a valid field type %s", *fieldType))
+		return nil, errors.New(fmt.Sprintf("Invalid Field Type '%s'", *fieldType))
 	}
 	return field, nil
 }

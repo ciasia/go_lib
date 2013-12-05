@@ -6,6 +6,10 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 )
 
 type Field interface {
@@ -60,8 +64,8 @@ func (f *FieldString) FromDb(stored interface{}) (interface{}, error) {
 	} else {
 		return UnescapeString(*storedStringPointer), nil
 	}
-
 }
+
 func (f *FieldString) ToDb(input interface{}) (string, error) {
 	// String -> String
 	inputString, ok := input.(string)
@@ -106,7 +110,7 @@ func (f *FieldId) GetScanReciever() interface{} {
 
 //ref
 type FieldRef struct {
-	collection string
+	Collection string
 }
 
 func (f *FieldRef) IsSearchable() bool { return false }
@@ -117,7 +121,7 @@ func (f *FieldRef) Init(raw map[string]interface{}) error {
 		return ModelDefinitionError{"Field has no collection", ""}
 	}
 	collectionString := collection.(string)
-	f.collection = collectionString
+	f.Collection = collectionString
 	return nil
 }
 
@@ -141,7 +145,9 @@ func (f *FieldRef) GetScanReciever() interface{} {
 	return &vp
 }
 
-//int
+/////////
+// int //
+/////////
 type FieldInt struct{}
 
 func (f *FieldInt) IsSearchable() bool { return false }
@@ -222,7 +228,6 @@ func (f *FieldFloat) FromDb(stored interface{}) (interface{}, error) {
 	} else {
 		return *storedFloatPointer, nil
 	}
-
 }
 func (f *FieldFloat) ToDb(input interface{}) (string, error) {
 	// float64 -> float64
@@ -290,9 +295,84 @@ func (f *FieldPassword) ToDb(input interface{}) (string, error) {
 	if !ok {
 		return "", MakeToDbUserErrorFromString("Must be a string")
 	}
-	return EscapeString(inputString), nil
+
+	return "\"" + HashPassword(inputString) + "\"", nil
 }
 func (f *FieldPassword) GetScanReciever() interface{} {
+	var v string
+	var vp *string = &v
+	return &vp
+}
+
+// string
+type FieldFile struct{}
+
+func (f *FieldFile) IsSearchable() bool { return true }
+
+func (f *FieldFile) Init(raw map[string]interface{}) error { return nil }
+
+func (f *FieldFile) FromDb(stored interface{}) (interface{}, error) {
+	// String -> String
+
+	storedStringPointer, ok := stored.(*string)
+	if !ok {
+		return nil, makeConversionError("string", stored)
+	}
+
+	if storedStringPointer == nil {
+		return nil, nil
+	} else {
+		return UnescapeString(*storedStringPointer), nil
+	}
+}
+
+func (f *FieldFile) ToDb(input interface{}) (string, error) {
+	// String -> String
+	inputString, ok := input.(string)
+	if !ok {
+		return "", MakeToDbUserErrorFromString(fmt.Sprintf("Converting string to DB, Value Must be a string, got '%v'", input))
+	}
+	return EscapeString(inputString), nil
+}
+func (f *FieldFile) GetScanReciever() interface{} {
+	var s string
+	var sp *string = &s
+	return &sp
+}
+
+//date
+type FieldDate struct{}
+
+func (f *FieldDate) IsSearchable() bool { return false }
+
+func (f *FieldDate) Init(raw map[string]interface{}) error { return nil }
+
+func (f *FieldDate) FromDb(stored interface{}) (interface{}, error) {
+	//
+
+	storedString, ok := stored.(*string)
+	if !ok {
+		return nil, makeConversionError("date", stored)
+	}
+
+	if storedString == nil {
+		return nil, nil
+	}
+	return *storedString, nil
+
+}
+
+func (f *FieldDate) ToDb(input interface{}) (string, error) {
+
+	str, ok := input.(string)
+	if !ok {
+		return "", MakeToDbUserErrorFromString("Must be a string")
+	}
+
+	return fmt.Sprintf("\"%s\"", str), nil
+}
+
+func (f *FieldDate) GetScanReciever() interface{} {
 	var v string
 	var vp *string = &v
 	return &vp
@@ -351,4 +431,25 @@ func unsignedIntToDb(input interface{}) (string, error) {
 		log.Printf("NOT INT: %v\n", input)
 		return "", makeConversionError("unsigned Int", input)
 	}
+}
+
+func HashPassword(plaintext string) string {
+	// Create the Salt: 256 random bytes
+	saltBytes := make([]byte, 256, 256)
+	_, _ = rand.Reader.Read(saltBytes)
+
+	// Create a hasher
+	hasher := sha256.New()
+
+	// Append plaintext bytes
+	hasher.Write([]byte(plaintext))
+
+	// Append salt bytes
+	hasher.Write(saltBytes)
+
+	// Get the hash from the hasher
+	hashBytes := hasher.Sum(nil)
+
+	// [256 bytes of salt] + [x bytes of hash] to a base64 string to store salt and password in one field
+	return base64.URLEncoding.EncodeToString(append(saltBytes, hashBytes...))
 }
