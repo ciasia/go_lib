@@ -126,6 +126,9 @@ func FieldFromDef(rawField map[string]interface{}) (Field, error) {
 	case "int":
 		field = &FieldInt{}
 		field.Init(rawField)
+	case "bool":
+		field = &FieldBool{}
+		field.Init(rawField)
 	case "text":
 		field = &FieldText{}
 		field.Init(rawField)

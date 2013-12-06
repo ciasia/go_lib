@@ -6,14 +6,15 @@ import (
 )
 
 type RawQueryConditions struct {
-	Collection *string                `json:"collection"`
-	Fieldset   *string                `json:"fieldset"`
-	Limit      *int64                 `json:"limit"`
-	Offset     *int64                 `json:"offset"`
-	Where      []*QueryConditionWhere `json:"where"`
-	Sort       []*QuerySort           `json:"sort"`
-	Search     map[string]string      `json:"search"`
-	Pk         *uint64                `json:"pk"`
+	Collection *string                 `json:"collection"`
+	Fieldset   *string                 `json:"fieldset"`
+	Limit      *int64                  `json:"limit"`
+	Offset     *int64                  `json:"offset"`
+	Where      []*QueryConditionWhere  `json:"where"`
+	Sort       []*QuerySort            `json:"sort"`
+	Filter     *map[string]interface{} `json:"filter"`
+	Search     map[string]string       `json:"search"`
+	Pk         *uint64                 `json:"pk"`
 }
 
 func (rawQuery *RawQueryConditions) TranslateToQuery() (*QueryConditions, error) {
@@ -29,6 +30,7 @@ func (rawQuery *RawQueryConditions) TranslateToQuery() (*QueryConditions, error)
 		where:      where,
 		fieldset:   rawQuery.Fieldset,
 		collection: *rawQuery.Collection,
+		filter:     rawQuery.Filter,
 		sort:       rawQuery.Sort,
 		search:     rawQuery.Search,
 		limit:      rawQuery.Limit,

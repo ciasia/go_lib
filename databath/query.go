@@ -19,6 +19,7 @@ type Query struct {
 	map_field    map[string]*MappedField
 	selectFields []string
 	joins        []string
+	context      Context
 }
 
 type MappedTable struct {
@@ -76,6 +77,7 @@ func GetQuery(context Context, model *Model, conditions *QueryConditions) (*Quer
 		return nil, err
 	}
 	query := Query{
+		context:    context,
 		collection: collection,
 		model:      model,
 		fieldList:  fieldList,
@@ -188,12 +190,27 @@ func (q *Query) BuildUpdate(changeset map[string]interface{}) (string, error) {
 		updateString := fmt.Sprintf("%s.%s = %s", field.table.alias, field.fieldNameInTable, escapedValue)
 		updates = append(updates, updateString)
 	}
-	// TODO: Smarter limit.
-	sql := fmt.Sprintf(`UPDATE %s %s SET %s %s LIMIT 1`,
+	limit := "LIMIT 1"
+	joins := ""
+	if q.conditions.limit != nil {
+		if *q.conditions.limit > 0 {
+			limit = fmt.Sprintf("LIMIT %d", *q.conditions.limit)
+		} else {
+			// This allows a '-1' to 'unlimit' the update
+			limit = ""
+			joins = strings.Join(q.joins, "\n  ")
+			// That is: Joins only work without a limit, and the scenarios always line up... hopefully
+		}
+
+	}
+
+	sql := fmt.Sprintf(`UPDATE %s %s %s SET %s %s %s`,
 		rootIncludedTable.collection.TableName,
 		rootIncludedTable.alias,
+		joins,
 		strings.Join(updates, ", "),
-		whereString)
+		whereString,
+		limit)
 	return sql, nil
 }
 

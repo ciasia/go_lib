@@ -25,6 +25,7 @@ type QueryConditions struct {
 	pk         *uint64
 	fieldset   *string
 	limit      *int64
+	filter     *map[string]interface{}
 	offset     *int64
 	sort       []*QuerySort
 	search     map[string]string
@@ -123,6 +124,11 @@ func (qc *QueryConditionWhere) GetConditionString(q *Query) (string, error) {
 		return "", QueryUserError{"Cannot query on non mapped field '" + qc.Field + "'."}
 	}
 
+	valString, ok := qc.Val.(string)
+	if ok && len(valString) > 2 && valString[0:1] == "#" {
+		paramName := valString[1:]
+		qc.Val = q.context.getValueFor(paramName)
+	}
 	if qc.Cmp == "IN" {
 
 		switch reflect.TypeOf(qc.Val).Kind() {
@@ -146,7 +152,6 @@ func (qc *QueryConditionWhere) GetConditionString(q *Query) (string, error) {
 		}
 
 	} else if qc.Cmp == "=" || qc.Cmp == "!=" || qc.Cmp == "<=" || qc.Cmp == ">=" || qc.Cmp == "<" || qc.Cmp == ">" {
-
 		escaped, err := field.field.ToDb(qc.Val)
 		if err != nil {
 			return "", UserErrorF("%T.ToDb Error: %s", field.field, err.Error())
@@ -159,6 +164,8 @@ func (qc *QueryConditionWhere) GetConditionString(q *Query) (string, error) {
 		}
 		escaped = escaped[1 : len(escaped)-1]
 		return fmt.Sprintf("%s.%s LIKE \"%%%s%%\"", field.table.alias, field.fieldNameInTable, escaped), nil
+	} else if qc.Cmp == "IS NULL" || qc.Cmp == "IS NOT NULL" {
+		return fmt.Sprintf("%s.%s %s", field.table.alias, field.fieldNameInTable, qc.Cmp), nil
 	} else {
 		return "", QueryUserError{"Compare method not allowed"}
 	}
@@ -199,19 +206,18 @@ func (q *Query) makeWhereString(conditions *QueryConditions) (string, error) {
 		conditions.where = append(conditions.where, &pkCondition)
 	}
 
-	/*
-		if conditions.filter != nil {
-			for fieldName, value := range conditions.filter {
-				filterCondition := QueryConditionWhere{
-					Field: fieldName,
-					Cmp:   "=",
-					Val:   &value,
-				}
-				conditions.where = append(conditions.where, &filterCondition)
+	if conditions.filter != nil {
+		for fieldName, value := range *conditions.filter {
+			filterCondition := QueryConditionWhere{
+				Field: fieldName,
+				Cmp:   "=",
+				Val:   value,
 			}
-
+			conditions.where = append(conditions.where, &filterCondition)
 		}
-	*/
+
+	}
+
 	if conditions.search != nil {
 
 		for field, term := range conditions.search {
