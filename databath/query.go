@@ -3,6 +3,7 @@ package databath
 import (
 	"database/sql"
 	"fmt"
+	"github.com/daemonl/go_lib/databath/types"
 	"log"
 	"reflect"
 	"strings"
@@ -99,8 +100,10 @@ func (q *Query) Dump() {
 	log.Println("END Field Map")
 }
 
-func (q *Query) BuildSelect() (string, error) {
+func (q *Query) BuildSelect() (string, []interface{}, error) {
 	rootIncludedTable, _ := q.includeCollection("", q.collection.TableName)
+
+	allParameters := make([]interface{}, 0, 0)
 
 	//log.Printf("==START Walk==")
 	for _, fieldDef := range q.fieldList {
@@ -109,7 +112,7 @@ func (q *Query) BuildSelect() (string, error) {
 		//log.Printf("</w>")
 		if err != nil {
 			log.Printf("Walk Error %s", err.Error())
-			return "", err
+			return "", allParameters, err
 		}
 	}
 	//log.Printf("==END Walk==")
@@ -131,14 +134,14 @@ func (q *Query) BuildSelect() (string, error) {
 	//log.Printf("==END Select==")
 
 	//log.Printf("==START Where==")
-	whereString, err := q.makeWhereString(q.conditions)
+	whereString, whereParameters, err := q.makeWhereString(q.conditions)
 	if err != nil {
-		return "", err
+		return "", allParameters, err
 	}
 	//log.Printf("==END Where==")
 	pageString, err := q.makePageString(q.conditions)
 	if err != nil {
-		return "", err
+		return "", allParameters, err
 	}
 	joinString := strings.Join(q.joins, "\n  ")
 	sql := fmt.Sprintf(`
@@ -154,41 +157,49 @@ func (q *Query) BuildSelect() (string, error) {
 		whereString,
 		pageString)
 
-	return sql, nil
+	return sql, whereParameters, nil
 }
 
-func (q *Query) BuildUpdate(changeset map[string]interface{}) (string, error) {
+func (q *Query) BuildUpdate(changeset map[string]interface{}) (string, []interface{}, error) {
+
+	allParameters := make([]interface{}, 0, 0)
 
 	rootIncludedTable, _ := q.includeCollection("", q.collection.TableName)
 
 	for _, fieldDef := range q.fieldList {
 		err := fieldDef.walkField(q, rootIncludedTable, 0)
 		if err != nil {
-			return "", err
+			return "", allParameters, err
 		}
 	}
 
-	whereString, err := q.makeWhereString(q.conditions)
+	whereString, whereParameters, err := q.makeWhereString(q.conditions)
 	if err != nil {
-		return "", UserErrorF("Building where conditions %s", err.Error())
+		return "", allParameters, UserErrorF("Building where conditions %s", err.Error())
 	}
 
 	updates := make([]string, 0, 0)
-
+	updateParameters := make([]interface{}, 0, 0)
 	for path, value := range changeset {
 		field, ok := q.map_field[path]
 		if !ok {
 			q.Dump()
 
-			return "", UserErrorF("Attempt to update field not in fieldset: '%s'", path)
+			return "", allParameters, UserErrorF("Attempt to update field not in fieldset: '%s'", path)
 		}
 
-		escapedValue, err := field.field.ToDb(value)
+		dbVal, err := field.field.ToDb(value)
 		if err != nil {
-			return "", UserErrorF("Error converting %s to database value: %s", path, err.Error())
+			return "", allParameters, UserErrorF("Error converting %s to database value: %s", path, err.Error())
 		}
-		updateString := fmt.Sprintf("%s.%s = %s", field.table.alias, field.fieldNameInTable, escapedValue)
+		updateString := fmt.Sprintf("`%s`.`%s` = ?", field.table.alias, field.fieldNameInTable)
+
 		updates = append(updates, updateString)
+		if dbVal == "NULL" {
+			updateParameters = append(updateParameters, nil)
+		} else {
+			updateParameters = append(updateParameters, dbVal)
+		}
 	}
 	limit := "LIMIT 1"
 	joins := ""
@@ -211,54 +222,64 @@ func (q *Query) BuildUpdate(changeset map[string]interface{}) (string, error) {
 		strings.Join(updates, ", "),
 		whereString,
 		limit)
-	return sql, nil
+	allParameters = append(updateParameters, whereParameters...)
+
+	return sql, allParameters, nil
 }
 
-func (q *Query) BuildInsert(parameters map[string]interface{}) (string, error) {
+func (q *Query) BuildInsert(valueMap map[string]interface{}) (string, []interface{}, error) {
 	values := make([]string, 0, 0)
 	fields := make([]string, 0, 0)
+	queryParameters := make([]interface{}, 0, 0)
 
 	rootIncludedTable, _ := q.includeCollection("", q.collection.TableName)
 	for _, fieldDef := range q.fieldList {
 		err := fieldDef.walkField(q, rootIncludedTable, 0)
 		if err != nil {
-			return "", err
+			return "", queryParameters, err
 		}
 	}
 
-	for path, value := range parameters {
+	for path, value := range valueMap {
 		field, ok := q.map_field[path]
 		if !ok {
 			q.Dump()
-			return "", UserErrorF("Attempt to update field not in fieldset: '%s'", path)
+			return "", queryParameters, UserErrorF("Attempt to update field not in fieldset: '%s'", path)
 		}
-		escapedValue, err := field.field.ToDb(value)
+		dbValue, err := field.field.ToDb(value)
 		if err != nil {
-			return "", UserErrorF("Error converting %s to database value: %s", path, err.Error())
+			return "", queryParameters, UserErrorF("Error converting %s to database value: %s", path, err.Error())
 		}
 		if field.table.collection != q.collection {
-			return "", UserErrorF("Error using field in create command - field '%s' doesn't belong to root table", path)
+			return "", queryParameters, UserErrorF("Error using field in create command - field '%s' doesn't belong to root table", path)
 		}
 		fields = append(fields, field.fieldNameInTable)
-		values = append(values, escapedValue)
+		values = append(values, "?")
+
+		if dbValue == "NULL" {
+			queryParameters = append(queryParameters, nil)
+		} else {
+			queryParameters = append(queryParameters, dbValue)
+		}
+
 	}
-	sql := fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s)`,
-		q.collection.TableName, strings.Join(fields, ", "), strings.Join(values, ", "))
-	return sql, nil
+	sql := fmt.Sprintf("INSERT INTO `%s` (`%s`) VALUES (%s)",
+		q.collection.TableName, strings.Join(fields, "`, `"), strings.Join(values, ", "))
+	return sql, queryParameters, nil
 }
 
 func (q *Query) BuildDelete(id uint64) (string, error) {
-	sql := fmt.Sprintf(`DELETE FROM %s WHERE id=%d LIMIT 1`, q.collection.TableName, id)
+	sql := fmt.Sprintf("DELETE FROM `%s` WHERE id=%d LIMIT 1", q.collection.TableName, id)
 	return sql, nil
 }
 
-func (q *Query) RunQueryWithResults(bath *Bath, sqlString string) ([]map[string]interface{}, error) {
+func (q *Query) RunQueryWithResults(bath *Bath, sqlString string, parameters []interface{}) ([]map[string]interface{}, error) {
 	allRows := make([]map[string]interface{}, 0, 0)
-	log.Println("SQL: " + sqlString)
+	log.Printf("SQL: %s %#v", sqlString, parameters)
 	c := bath.GetConnection()
 	db := c.GetDB()
 	defer c.Release()
-	res, err := db.Query(sqlString)
+	res, err := db.Query(sqlString, parameters...)
 	if err != nil {
 		return allRows, err
 	}
@@ -273,8 +294,8 @@ func (q *Query) RunQueryWithResults(bath *Bath, sqlString string) ([]map[string]
 	}
 	return allRows, nil
 }
-func (q *Query) RunQueryWithSingleResult(bath *Bath, sqlString string) (map[string]interface{}, error) {
-	allRows, err := q.RunQueryWithResults(bath, sqlString)
+func (q *Query) RunQueryWithSingleResult(bath *Bath, sqlString string, parameters []interface{}) (map[string]interface{}, error) {
+	allRows, err := q.RunQueryWithResults(bath, sqlString, parameters)
 	if err != nil {
 		return make(map[string]interface{}), err
 	}
@@ -386,7 +407,7 @@ func (q *Query) leftJoin(baseTable *MappedTable, prefixPath []string, path []str
 	}
 	prefixPath = append(prefixPath, tableField)
 	tableIncludePath := strings.Join(prefixPath, ".")
-	refField := fieldDef.(*FieldRef)
+	refField := fieldDef.(*types.FieldRef)
 
 	existingDef, ok := q.map_table[tableIncludePath]
 	if ok {

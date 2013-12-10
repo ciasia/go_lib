@@ -37,15 +37,16 @@ type QuerySort struct {
 }
 
 type QueryCondition interface {
-	GetConditionString(q *Query) (string, error)
+	GetConditionString(q *Query) (string, []interface{}, error)
 }
 
 type QueryConditionString struct {
-	String string // No JSON. This CANNOT be exposed to the user, Utility Only.
+	Str        string // No JSON. This CANNOT be exposed to the user, Utility Only.
+	Parameters []interface{}
 }
 
-func (qc *QueryConditionString) GetConditionString(q *Query) (string, error) {
-	return "(" + qc.String + ")", nil
+func (qc *QueryConditionString) GetConditionString(q *Query) (string, []interface{}, error) {
+	return "(" + qc.Str + ")", qc.Parameters, nil
 }
 
 type QueryConditionWhere struct {
@@ -115,13 +116,15 @@ func (cq *CustomQuery) Run(bath *Bath, inFields []interface{}) ([]map[string]int
 	return allRows, nil
 }
 
-func (qc *QueryConditionWhere) GetConditionString(q *Query) (string, error) {
+func (qc *QueryConditionWhere) GetConditionString(q *Query) (string, []interface{}, error) {
 	//log.Println("GetConditionString")
+
+	parameters := make([]interface{}, 0, 0)
 
 	field, ok := q.map_field[qc.Field]
 	if !ok {
 		q.Dump()
-		return "", QueryUserError{"Cannot query on non mapped field '" + qc.Field + "'."}
+		return "", parameters, QueryUserError{"Cannot query on non mapped field '" + qc.Field + "'."}
 	}
 
 	valString, ok := qc.Val.(string)
@@ -137,59 +140,68 @@ func (qc *QueryConditionWhere) GetConditionString(q *Query) (string, error) {
 			length := s.Len()
 			escapedSlice := make([]string, length, length)
 			for i := 0; i < length; i++ {
-				escaped, err := field.field.ToDb(s.Index(i).Interface())
+				dbVal, err := field.field.ToDb(s.Index(i).Interface())
 				if err != nil {
-					return "", err
+					return "", parameters, err
 				}
-				escapedSlice[i] = escaped
-
+				escapedSlice[i] = "?"
+				parameters = append(parameters, dbVal)
 			}
-			return fmt.Sprintf("%s.%s IN (%s)", field.table.alias, field.fieldNameInTable, strings.Join(escapedSlice, ", ")), nil
+			return fmt.Sprintf("`%s`.`%s` IN (%s)", field.table.alias, field.fieldNameInTable, strings.Join(escapedSlice, ", ")), parameters, nil
 
 		default:
 			fmt.Printf("TYPE for IN: %v\n", qc.Val)
-			return "", QueryUserError{"IN conditions require that val is an array"}
+			return "", parameters, QueryUserError{"IN conditions require that val is an array"}
 		}
 
 	} else if qc.Cmp == "=" || qc.Cmp == "!=" || qc.Cmp == "<=" || qc.Cmp == ">=" || qc.Cmp == "<" || qc.Cmp == ">" {
-		escaped, err := field.field.ToDb(qc.Val)
+		dbVal, err := field.field.ToDb(qc.Val)
 		if err != nil {
-			return "", UserErrorF("%T.ToDb Error: %s", field.field, err.Error())
+
+			return "", parameters, UserErrorF("%T.ToDb Error: %s", field.field, err.Error())
 		}
-		return fmt.Sprintf("%s.%s %s %s", field.table.alias, field.fieldNameInTable, qc.Cmp, escaped), nil
+		parameters = append(parameters, dbVal)
+		return fmt.Sprintf("`%s`.`%s` %s ?", field.table.alias, field.fieldNameInTable, qc.Cmp), parameters, nil
 	} else if qc.Cmp == "LIKE" {
-		escaped, err := field.field.ToDb(qc.Val)
+		dbVal, err := field.field.ToDb(qc.Val)
 		if err != nil {
-			return "", err
+			return "", parameters, err
 		}
-		escaped = escaped[1 : len(escaped)-1]
-		return fmt.Sprintf("%s.%s LIKE \"%%%s%%\"", field.table.alias, field.fieldNameInTable, escaped), nil
+		dbVal = "%" + dbVal + "%"
+		parameters = append(parameters, dbVal)
+		return fmt.Sprintf("`%s`.`%s` LIKE ?", field.table.alias, field.fieldNameInTable), parameters, nil
 	} else if qc.Cmp == "IS NULL" || qc.Cmp == "IS NOT NULL" {
-		return fmt.Sprintf("%s.%s %s", field.table.alias, field.fieldNameInTable, qc.Cmp), nil
+		return fmt.Sprintf("`%s`.`%s` %s", field.table.alias, field.fieldNameInTable, qc.Cmp), parameters, nil
 	} else {
-		return "", QueryUserError{"Compare method not allowed"}
+		return "", parameters, QueryUserError{"Compare method not allowed"}
 	}
 
 }
 
-func (q *Query) JoinConditionsWith(conditions []QueryCondition, joiner string) (string, error) {
+func (q *Query) JoinConditionsWith(conditions []QueryCondition, joiner string) (string, []interface{}, error) {
 	//log.Println("Start Join")
 	results := make([]string, len(conditions), len(conditions))
+	parameters := make([]interface{}, 0, 0)
+	var conditionParameters []interface{}
 	var err error
 	for i, condition := range conditions {
 		//log.Printf("Join %d/%d", i+1, len(conditions))
-		results[i], err = condition.GetConditionString(q)
+		results[i], conditionParameters, err = condition.GetConditionString(q)
+		for _, p := range conditionParameters {
+			parameters = append(parameters, p)
+		}
+
 		//log.Println("Join %d/%d Done", i+1, len(conditions))
 		if err != nil {
 			log.Printf("Where Condition Error: %s", err)
-			return "", UserErrorF("building condition %d: %s", i, err.Error())
+			return "", parameters, UserErrorF("building condition %d: %s", i, err.Error())
 		}
 	}
 	//log.Println("End Join")
-	return strings.Join(results, joiner), nil
+	return strings.Join(results, joiner), parameters, nil
 }
 
-func (q *Query) makeWhereString(conditions *QueryConditions) (string, error) {
+func (q *Query) makeWhereString(conditions *QueryConditions) (string, []interface{}, error) {
 	log.Println("Begin makeWhereString")
 
 	if conditions.where == nil {
@@ -253,11 +265,11 @@ func (q *Query) makeWhereString(conditions *QueryConditions) (string, error) {
 							}
 							partGroup[i] = &condition
 						}
-						joined, err := q.JoinConditionsWith(partGroup, " OR ")
+						joined, joinedParameters, err := q.JoinConditionsWith(partGroup, " OR ")
 						if err != nil {
-							return "", err
+							return "", joinedParameters, err
 						}
-						strCondition := QueryConditionString{joined}
+						strCondition := QueryConditionString{Str: joined, Parameters: joinedParameters}
 						conditions.where = append(conditions.where, &strCondition)
 					}
 
@@ -272,11 +284,11 @@ func (q *Query) makeWhereString(conditions *QueryConditions) (string, error) {
 					}
 					partGroup[i] = &qc
 				}
-				joined, err := q.JoinConditionsWith(partGroup, " OR ")
+				joined, joinedParameters, err := q.JoinConditionsWith(partGroup, " OR ")
 				if err != nil {
-					return "", err
+					return "", joinedParameters, err
 				}
-				strCondition := QueryConditionString{joined}
+				strCondition := QueryConditionString{Str: joined, Parameters: joinedParameters}
 				conditions.where = append(conditions.where, &strCondition)
 			}
 
@@ -285,11 +297,11 @@ func (q *Query) makeWhereString(conditions *QueryConditions) (string, error) {
 	}
 
 	if len(conditions.where) < 1 {
-
-		return "", nil
+		p := make([]interface{}, 0, 0)
+		return "", p, nil
 	}
-	joined, err := q.JoinConditionsWith(conditions.where, " AND ")
-	return "WHERE " + joined, err
+	joined, parameters, err := q.JoinConditionsWith(conditions.where, " AND ")
+	return "WHERE " + joined, parameters, err
 }
 
 func (q *Query) makePageString(conditions *QueryConditions) (string, error) {

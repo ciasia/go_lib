@@ -1,4 +1,9 @@
-package databath
+package types
+
+import (
+	"errors"
+	"fmt"
+)
 
 type FromDbError struct {
 	raw     error
@@ -35,4 +40,8 @@ func MakeFromDbErrorFromString(message string) *FromDbError {
 func MakeToDbUserErrorFromString(message string) *ToDbUserError {
 	e := ToDbUserError{message: message}
 	return &e
+}
+
+func UserErrorF(format string, parameters ...interface{}) error {
+	return errors.New(fmt.Sprintf(format, parameters...))
 }

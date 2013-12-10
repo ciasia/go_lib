@@ -3,6 +3,7 @@ package databath
 import (
 	"errors"
 	"fmt"
+	"github.com/daemonl/go_lib/databath/types"
 	"log"
 	"reflect"
 	"strings"
@@ -242,7 +243,7 @@ func (f *FieldSetFieldDefTotalDuration) walkField(query *Query, baseTable *Mappe
 		baseTable.alias)
 	query.joins = append(query.joins, join)
 
-	field := FieldFloat{}
+	field := types.FieldFloat{}
 
 	// ODD OBSUCIRY: sel requires knowledge of the return from includeField.
 	// The pointer will only be used after this function returns

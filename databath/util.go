@@ -22,12 +22,12 @@ func (m *Model) GetIdentityString(bath *Bath, collectionName string, pk uint64) 
 		log.Println(err)
 		return "", err
 	}
-	sql, err := q.BuildSelect()
+	sql, parameters, err := q.BuildSelect()
 	if err != nil {
 		log.Println(err)
 		return "", err
 	}
-	res, err := q.RunQueryWithSingleResult(bath, sql)
+	res, err := q.RunQueryWithSingleResult(bath, sql, parameters)
 	if err != nil {
 		log.Println(err)
 		return "", err
