@@ -47,6 +47,7 @@ func (m *Model) WriteHistory(bath *Bath, userId uint64, action string, collectio
 	identity, _ := m.GetIdentityString(bath, collectionName, entityId)
 	timestamp := time.Now().Unix()
 
+	log.Println("WRITE HISTORY", userId, identity, timestamp, action, collectionName, entityId)
 	sql := fmt.Sprintf(`INSERT INTO history 
 		(user, identity, timestamp, action, entity, entity_id) VALUES 
 		(%d, '%s', %d, '%s', '%s', %d)`,

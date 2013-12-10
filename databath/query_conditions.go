@@ -12,11 +12,13 @@ import (
 var re_notAlphaNumeric *regexp.Regexp
 var re_numeric *regexp.Regexp
 var re_questionmark *regexp.Regexp
+var re_fieldInSquares *regexp.Regexp
 
 func init() {
 	re_notAlphaNumeric = regexp.MustCompile(`[^a-zA-Z0-9]`)
 	re_numeric = regexp.MustCompile(`^[0-9]*$`)
 	re_questionmark = regexp.MustCompile(`\?`)
+	re_fieldInSquares = regexp.MustCompile(`\[[a-zA-Z0-9_\.]*\]`)
 }
 
 type QueryConditions struct {
@@ -249,7 +251,8 @@ func (q *Query) makeWhereString(conditions *QueryConditions) (string, []interfac
 				} else {
 					allTextFields := make([]string, 0, 0)
 					for path, mappedField := range q.map_field {
-						if mappedField.field.IsSearchable() {
+
+						if mappedField.CanSearch() {
 							allTextFields = append(allTextFields, path)
 						}
 					}

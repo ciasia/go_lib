@@ -27,7 +27,6 @@ func getFieldSetFieldDef(raw interface{}) (FieldSetFieldDef, error) {
 
 	mapVals, isMap := raw.(map[string]interface{})
 	if isMap {
-
 		fdTypeRaw, ok := mapVals["type"]
 		if !ok {
 			return nil, errors.New("Fieldset was a map without a 'type' key, couldn't be resolved")
@@ -44,6 +43,9 @@ func getFieldSetFieldDef(raw interface{}) (FieldSetFieldDef, error) {
 		case "aggregate":
 			fsfdv := FieldSetFieldDefAggregate{}
 			fsfd = &fsfdv
+		case "raw":
+			fsfdv := FieldSetFieldDefRaw{}
+			fsfd = &fsfdv
 		default:
 			return nil, errors.New("Fieldset type " + fdType + " couldn't be resolved")
 		}
@@ -53,12 +55,13 @@ func getFieldSetFieldDef(raw interface{}) (FieldSetFieldDef, error) {
 		var field reflect.StructField
 
 		// Loop through the fields on the struct
+		idx := make([]int, 1, 1)
 		for i := 0; i < fsfdVal.NumField(); i++ {
+			idx[0] = i
 			field = fsfdVal.Field(i)
 
 			if tag := field.Tag.Get("json"); tag != "" {
 				// The field has a json tag.
-
 				mapVal, mapValExists := mapVals[tag]
 				mvType := reflect.TypeOf(mapVal)
 				if !mapValExists {
@@ -68,9 +71,12 @@ func getFieldSetFieldDef(raw interface{}) (FieldSetFieldDef, error) {
 				if !mvType.AssignableTo(field.Type) {
 					return nil, errors.New("Fieldset type " + fdType + " couldn't be mapped, map key '" + tag + "' not assignable to required type")
 				}
-				fieldVal := fsfdElem.Field(i)
+				fieldVal := fsfdElem.FieldByIndex(idx)
+
 				if fieldVal.CanSet() {
 					fieldVal.Set(reflect.ValueOf(mapVal))
+				} else {
+					log.Println("????????? NOT SET " + tag)
 				}
 			}
 		}
@@ -140,7 +146,7 @@ func (f *FieldSetFieldDefNormal) walkField(query *Query, baseTable *MappedTable,
 	} else {
 		// Otherwise, include a new table (If needed)
 
-		newTable, err := query.leftJoin(baseTable, f.pathSplit[0:index], f.pathSplit[index:])
+		newTable, err := query.leftJoin(baseTable, f.pathSplit[0:index], f.pathSplit[index])
 		if err != nil {
 			return err
 		}
@@ -150,16 +156,65 @@ func (f *FieldSetFieldDefNormal) walkField(query *Query, baseTable *MappedTable,
 	}
 }
 
+/////////
+// RAW //
+/////////
+
+type FieldSetFieldDefRaw struct {
+	Query    string `json:"query"`
+	DataType string `json:"dataType"`
+	Path     string `json:"path"`
+}
+
+func (f *FieldSetFieldDefRaw) init() error { return nil }
+func (f *FieldSetFieldDefRaw) walkField(query *Query, baseTable *MappedTable, index int) error {
+
+	field, err := FieldByType(f.DataType)
+	if err != nil {
+		return err
+	}
+
+	sel := ""
+	mappedField, err := query.includeField(f.Path, field, baseTable, &sel)
+	mappedField.AllowSearch = false
+
+	var replError error
+	replFunc := func(in string) string {
+		log.Println("Walk: " + in)
+		parts := strings.Split(in[1:len(in)-1], ".")
+		currentTable := baseTable
+		for i, tableJump := range parts[:len(parts)-1] {
+			log.Println("Walk " + tableJump)
+
+			currentTable, err = query.leftJoin(currentTable, parts[:i+1], parts[i])
+			if err != nil {
+				replError = err
+				return ""
+			}
+
+		}
+		return currentTable.alias + "." + parts[len(parts)-1]
+	}
+	raw := re_fieldInSquares.ReplaceAllStringFunc(f.Query, replFunc)
+
+	if replError != nil {
+		return replError
+	}
+
+	sel = raw + " AS " + mappedField.alias
+
+	return nil
+}
+
 type FieldSetFieldDefAggregate struct {
 	path      string `json:"path"`
-	pathSplit string `json:"path"`
+	pathSplit string
 }
 
 func (f *FieldSetFieldDefAggregate) init() error {
 	return nil
 }
 func (f *FieldSetFieldDefAggregate) walkField(query *Query, baseTable *MappedTable, index int) error {
-
 	log.Printf("WalkField AGGREGATE \n")
 	return nil
 }
@@ -221,7 +276,8 @@ func (f *FieldSetFieldDefTotalDuration) walkField(query *Query, baseTable *Mappe
 		basePathIndex = i
 		_, ok := linkBaseTable.collection.Fields[part]
 		if ok {
-			linkBaseTable, err = query.leftJoin(linkBaseTable, f.PathSplit[:i], f.PathSplit[i+1:])
+
+			linkBaseTable, err = query.leftJoin(linkBaseTable, f.PathSplit[:i], f.PathSplit[i+1])
 			if err != nil {
 				return err
 			}
@@ -230,10 +286,12 @@ func (f *FieldSetFieldDefTotalDuration) walkField(query *Query, baseTable *Mappe
 		}
 	}
 
-	mappedLinkCollection, err := query.includeCollection(strings.Join(f.PathSplit[:basePathIndex], "."), linkCollectionName)
+	mappedLinkCollection, err := query.includeCollection("R:"+strings.Join(f.PathSplit[:basePathIndex], "."), linkCollectionName)
 	if err != nil {
 		return err
 	}
+
+	log.Println("WALK ")
 
 	join := fmt.Sprintf("LEFT JOIN %s %s ON %s.%s = %s.id",
 		mappedLinkCollection.collection.TableName,
@@ -251,7 +309,7 @@ func (f *FieldSetFieldDefTotalDuration) walkField(query *Query, baseTable *Mappe
 	sel := ""
 	mappedField, err := query.includeField(f.Path, &field, mappedLinkCollection, &sel)
 
-	sel = fmt.Sprintf("SUM(%s.%s - %s.%s) AS %s",
+	sel = fmt.Sprintf("SUM(%s.%s - %s.%s)/(60*60) AS %s",
 		mappedLinkCollection.alias,
 		f.Stop,
 		mappedLinkCollection.alias,

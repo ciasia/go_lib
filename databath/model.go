@@ -90,7 +90,6 @@ func (c *Collection) GetFieldSet(fieldSetNamePointer *string) ([]FieldSetFieldDe
 	log.Printf("Using fieldset: %s.%s\n", c.TableName, fieldSetName)
 
 	return fields, nil
-
 }
 
 func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
@@ -162,7 +161,6 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 			}
 
 			rawCollection.FieldSets["identity"] = []interface{}{"name"}
-
 		}
 
 		for name, rawSet := range rawCollection.FieldSets {
@@ -180,6 +178,23 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 			}
 			fieldSets[name] = fieldSetDefs
 		}
+
+		/*
+			extraTypes := make([]FieldSetFieldDef, 0, 0)
+			for _, def := range fieldSets["identity"] {
+				// Only add non normal fields
+				_, ok := def.(*FieldSetFieldDefNormal)
+				if !ok {
+					extraTypes = append(extraTypes, def)
+				}
+			}
+			for name, set := range fieldSets {
+				if name == "identity" {
+					continue
+				}
+				set = append(set, extraTypes...)
+			}
+		*/
 
 		collection := Collection{
 			Fields:    fields,

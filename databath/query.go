@@ -37,6 +37,14 @@ type MappedField struct {
 	table            *MappedTable
 	def              *Collection
 	selectString     *string
+	AllowSearch      bool
+}
+
+func (mf *MappedField) CanSearch() bool {
+	if !mf.field.IsSearchable() {
+		return false
+	}
+	return mf.AllowSearch
 }
 
 type Context interface {
@@ -360,9 +368,13 @@ func (q *Query) ConvertResultRow(rs *sql.Rows) (map[string]interface{}, error) {
 func (q *Query) includeCollection(path string, collectionName string) (*MappedTable, error) {
 
 	collection, ok := q.model.Collections[collectionName]
-
 	if !ok {
 		return nil, QueryUserError{"Collection " + collectionName + " doesn't exist"}
+	}
+
+	alreadyMapped, ok := q.map_table[path]
+	if ok {
+		return alreadyMapped, nil
 	}
 
 	alias := fmt.Sprintf("t%d", q.i_table)
@@ -392,21 +404,19 @@ func (q *Query) includeField(fullName string, field Field, mappedTable *MappedTa
 		fieldNameInTable: fieldNameInTable,
 		table:            mappedTable,
 		selectString:     selectString,
+		AllowSearch:      true,
 	}
 	q.map_field[fullName] = &mf
 	q.i_field += 1
 	return &mf, nil
 }
 
-func (q *Query) leftJoin(baseTable *MappedTable, prefixPath []string, path []string) (*MappedTable, error) {
-	tableField := path[0]
-	path = path[1:]
+func (q *Query) leftJoin(baseTable *MappedTable, prefixPath []string, tableField string) (*MappedTable, error) {
 	fieldDef, fieldExists := baseTable.collection.Fields[tableField]
 	if !fieldExists {
 		return nil, QueryUserError{"Field " + tableField + " does not exist in " + baseTable.collection.TableName}
 	}
-	prefixPath = append(prefixPath, tableField)
-	tableIncludePath := strings.Join(prefixPath, ".")
+	tableIncludePath := strings.Join(prefixPath, ".") + "." + tableField
 	refField := fieldDef.(*types.FieldRef)
 
 	existingDef, ok := q.map_table[tableIncludePath]
