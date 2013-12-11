@@ -26,7 +26,7 @@ func FieldByType(typeString string) (Field, error) {
 	case "array":
 		return &types.FieldString{}, nil
 	case "datetime":
-		return &types.FieldInt{}, nil
+		return &types.FieldDateTime{}, nil
 	case "date":
 		return &types.FieldDate{}, nil
 	case "int":
@@ -47,6 +47,7 @@ func FieldByType(typeString string) (Field, error) {
 		return &types.FieldString{}, nil
 	case "auto_timestamp":
 		return &types.FieldInt{}, nil
+
 	default:
 		return nil, errors.New(fmt.Sprintf("Invalid Field Type '%s'", typeString))
 	}
