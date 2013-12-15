@@ -55,29 +55,53 @@ func getFieldSetFieldDef(raw interface{}) (FieldSetFieldDef, error) {
 		var field reflect.StructField
 
 		// Loop through the fields on the struct
-		idx := make([]int, 1, 1)
+
 		for i := 0; i < fsfdVal.NumField(); i++ {
-			idx[0] = i
-			field = fsfdVal.Field(i)
+			field = fsfdVal.Field(i) // reflect.StructField
+			log.Printf("FIELD TYPE: %v %v", field.Type, field.Type.Kind())
 
 			if tag := field.Tag.Get("json"); tag != "" {
 				// The field has a json tag.
 				mapVal, mapValExists := mapVals[tag]
-				mvType := reflect.TypeOf(mapVal)
-				if !mapValExists {
-					return nil, errors.New("Fieldset type " + fdType + " couldn't be mapped, required map key '" + tag + "' not set")
-				}
 
-				if !mvType.AssignableTo(field.Type) {
-					return nil, errors.New("Fieldset type " + fdType + " couldn't be mapped, map key '" + tag + "' not assignable to required type")
-				}
-				fieldVal := fsfdElem.FieldByIndex(idx)
+				fieldVal := fsfdElem.FieldByIndex(field.Index) // reflect.Value
 
-				if fieldVal.CanSet() {
-					fieldVal.Set(reflect.ValueOf(mapVal))
+				isPointer := field.Type.Kind() == reflect.Ptr
+
+				fieldType := field.Type
+
+				mvv := reflect.ValueOf(mapVal)
+
+				if isPointer {
+					if mapValExists {
+						// TODO: This only works with strings...
+						var p string = reflect.ValueOf(mapVal).String()
+						p = mvv.String()
+						fieldVal.Set(reflect.ValueOf(&p))
+					}
 				} else {
-					log.Println("????????? NOT SET " + tag)
+
+					mvType := reflect.TypeOf(mapVal)
+
+					if !mapValExists {
+						return nil, errors.New("Fieldset type " + fdType + " couldn't be mapped, required map key '" + tag + "' not set")
+					} else {
+						if !mvType.AssignableTo(fieldType) {
+							return nil, errors.New("Fieldset type " + fdType + " couldn't be mapped, map key '" + tag + "' not assignable to required type " + fieldVal.Type().String())
+						}
+
+						if fieldVal.CanSet() {
+							if isPointer {
+								log.Println("SET POINTER")
+							}
+							fieldVal.Set(mvv)
+						} else {
+							log.Println("Can't Set " + tag)
+						}
+
+					}
 				}
+
 			}
 		}
 
@@ -88,26 +112,6 @@ func getFieldSetFieldDef(raw interface{}) (FieldSetFieldDef, error) {
 
 	fmt.Printf("FST: %v\n", raw)
 	return nil, errors.New("Fieldset type couldn't be resolved")
-
-	/*
-		if reflect.TypeOf(raw).Kind() == reflect.Map {
-
-			stringMap := make(map[string]interface{})
-
-			rawMap := reflect.ValueOf(raw)
-
-			fieldSetFieldType, ok := rawMap.MapIndex("type")
-			if !ok {
-
-			}
-
-
-			return nil, errors.New("Fieldset type " + fieldSetFieldType + " couldn't be resolved")
-
-		}
-
-
-	*/
 }
 
 type FieldSetFieldDefNormal struct {
@@ -129,11 +133,11 @@ func (f *FieldSetFieldDefNormal) walkField(query *Query, baseTable *MappedTable,
 
 	field, fieldExists := baseTable.collection.Fields[fieldName]
 	if !fieldExists {
-		log.Printf("Field Doesn't exist\n")
+		log.Printf("Field %s Doesn't exist\n", fieldName)
 		return nil
 	}
 	if field == nil {
-		log.Printf("Field Is Null\n")
+		log.Printf("Field %a Is Null\n", fieldName)
 		return nil
 	}
 
@@ -161,9 +165,10 @@ func (f *FieldSetFieldDefNormal) walkField(query *Query, baseTable *MappedTable,
 /////////
 
 type FieldSetFieldDefRaw struct {
-	Query    string `json:"query"`
-	DataType string `json:"dataType"`
-	Path     string `json:"path"`
+	Query    string  `json:"query"`
+	DataType string  `json:"dataType"`
+	Path     string  `json:"path"`
+	Join     *string `json:"join"`
 }
 
 func (f *FieldSetFieldDefRaw) init() error { return nil }
@@ -185,7 +190,6 @@ func (f *FieldSetFieldDefRaw) walkField(query *Query, baseTable *MappedTable, in
 		currentTable := baseTable
 		for i, tableJump := range parts[:len(parts)-1] {
 			log.Println("Walk " + tableJump)
-
 			currentTable, err = query.leftJoin(currentTable, parts[:i+1], parts[i])
 			if err != nil {
 				replError = err
@@ -195,6 +199,27 @@ func (f *FieldSetFieldDefRaw) walkField(query *Query, baseTable *MappedTable, in
 		}
 		return currentTable.alias + "." + parts[len(parts)-1]
 	}
+
+	joinReplFunc := func(in string) string {
+		log.Println("Collection Walk: " + in)
+		collectionName := in[1 : len(in)-1]
+		mapped, ok := query.map_table[collectionName]
+		if ok {
+			log.Printf("Alias: %s->%s\n", collectionName, mapped.alias)
+			return mapped.alias
+
+		}
+		fmt.Println(query.map_table)
+		log.Printf("No Alias: %s\n", collectionName)
+
+		return collectionName
+	}
+
+	if f.Join != nil {
+		joinReplaced := re_fieldInSquares.ReplaceAllStringFunc(*f.Join, joinReplFunc)
+		query.joins = append(query.joins, joinReplaced)
+	}
+
 	raw := re_fieldInSquares.ReplaceAllStringFunc(f.Query, replFunc)
 
 	if replError != nil {

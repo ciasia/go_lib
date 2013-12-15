@@ -7,7 +7,12 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 )
+
+func ParseErrF(format string, parameters ...interface{}) error {
+	return errors.New(fmt.Sprintf(format, parameters...))
+}
 
 type rawModel struct {
 	Collections   map[string]rawCollection  `json:"collections"`
@@ -16,20 +21,28 @@ type rawModel struct {
 }
 
 type rawCollection struct {
-	Fields    map[string]map[string]interface{} `json:"fields"`
-	FieldSets map[string][]interface{}          `json:"fieldsets"`
+	Fields         map[string]map[string]interface{} `json:"fields"`
+	FieldSets      map[string][]string               `json:"fieldsets"`
+	CustomFields   map[string]interface{}            `json:"custom"`
+	SearchPrefixes map[string]*rawSearchPrefix       `json:"searchPrefixes"`
 }
 type rawCustomQuery struct {
 	Query     string                            `json:"query"`
 	InFields  []map[string]interface{}          `json:"parameters"`
 	OutFields map[string]map[string]interface{} `json:"columns"`
+	Type      string                            `json:"type"`
+}
+type rawSearchPrefix struct {
+	Field string `json:"field"`
 }
 
 type Hook struct {
-	Collection string                 `json:"collection"`
-	When       HookWhen               `json:"when"`
-	Set        map[string]interface{} `json:"set"`
-	Email      *HookEmail             `json:"email"`
+	Collection   string                 `json:"collection"`
+	When         HookWhen               `json:"when"`
+	Set          map[string]interface{} `json:"set"`
+	Email        *HookEmail             `json:"email"`
+	Raw          *rawCustomQuery        `json:"raw"`
+	CustomAction *CustomQuery
 }
 type HookWhen struct {
 	Field string `json:"field"`
@@ -57,6 +70,7 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 			Query:     rawQuery.Query,
 			InFields:  make([]Field, len(rawQuery.InFields), len(rawQuery.InFields)),
 			OutFields: make(map[string]Field),
+			Type:      rawQuery.Type,
 		}
 		for i, rawField := range rawQuery.InFields {
 			field, err := FieldFromDef(rawField)
@@ -89,11 +103,22 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 			fields[fieldName] = field
 		}
 
+		customFields := make(map[string]FieldSetFieldDef)
+
+		for name, rawCustomField := range rawCollection.CustomFields {
+			fsfd, err := getFieldSetFieldDef(rawCustomField)
+			if err != nil {
+				log.Printf(err.Error())
+				return nil, err
+			}
+			customFields[name] = fsfd
+		}
+
 		fieldSets := make(map[string][]FieldSetFieldDef)
 
 		_, hasDefaultFieldset := rawCollection.FieldSets["default"]
 		if !hasDefaultFieldset {
-			allFieldNames := make([]interface{}, 0, 0)
+			allFieldNames := make([]string, 0, 0)
 			for fieldName, _ := range rawCollection.Fields {
 				allFieldNames = append(allFieldNames, fieldName)
 			}
@@ -108,7 +133,7 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 				return nil, errors.New(fmt.Sprintf("No identity fieldset, and collection (%s) doesn't have a 'name' field to fall back upon.", collectionName))
 			}
 
-			rawCollection.FieldSets["identity"] = []interface{}{"name"}
+			rawCollection.FieldSets["identity"] = []string{"name"}
 		}
 
 		for name, rawSet := range rawCollection.FieldSets {
@@ -116,31 +141,79 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 			rawSet = append(rawSet, "id")
 
 			fieldSetDefs := make([]FieldSetFieldDef, len(rawSet), len(rawSet))
-			for i, rawFd := range rawSet {
-				fsfd, err := getFieldSetFieldDef(rawFd)
-				if err != nil {
-					log.Printf(err.Error())
-					return nil, err
+			for i, fieldName := range rawSet {
+
+				customField, ok := customFields[fieldName]
+				if ok {
+					fieldSetDefs[i] = customField
+					continue
 				}
-				fieldSetDefs[i] = fsfd
+
+				fsfd := FieldSetFieldDefNormal{
+					path:      fieldName,
+					pathSplit: strings.Split(fieldName, "."),
+				}
+				fieldSetDefs[i] = &fsfd
+
+				//return nil, UserErrorF("No field or custom field for %s in %s", fieldName, collectionName)
+
 			}
 			fieldSets[name] = fieldSetDefs
 		}
 
+		searchPrefixes := make(map[string]*SearchPrefix)
+		for prefixStr, rawPrefix := range rawCollection.SearchPrefixes {
+			//field, ok := fields[rawPrefix.Field]
+			//if !ok {
+			//	return nil, ParseErrF("Prefix referenced field '%s' which doesn't exist", rawPrefix.Field)
+			//}
+			prefix := SearchPrefix{
+				//Field:     field,
+				Prefix:    prefixStr,
+				FieldName: rawPrefix.Field,
+			}
+			searchPrefixes[prefixStr] = &prefix
+		}
+
 		collection := Collection{
-			Fields:    fields,
-			FieldSets: fieldSets,
-			TableName: collectionName,
+			Fields:         fields,
+			FieldSets:      fieldSets,
+			TableName:      collectionName,
+			CustomFields:   customFields,
+			SearchPrefixes: searchPrefixes,
 		}
 		collections[collectionName] = &collection
 	}
 
 	for _, h := range model.Hooks {
+
+		if h.Raw != nil {
+			rawQuery := h.Raw
+			log.Println("Custom Query in Hook")
+			cq := CustomQuery{
+				Query:     rawQuery.Query,
+				InFields:  make([]Field, len(rawQuery.InFields), len(rawQuery.InFields)),
+				OutFields: make(map[string]Field),
+				Type:      rawQuery.Type,
+			}
+			for i, rawField := range rawQuery.InFields {
+				field, err := FieldFromDef(rawField)
+				if err != nil {
+					log.Println(err)
+					return nil, errors.New(fmt.Sprintf("Error parsing hook ", err.Error()))
+				}
+				cq.InFields[i] = field
+			}
+			log.Println("DONE")
+			h.CustomAction = &cq
+		}
+
 		collection, ok := collections[h.Collection]
 		if !ok {
 			UserErrorF("Hook on non existing collection %s", h.Collection)
 		}
 		collection.Hooks = append(collection.Hooks, h)
+
 	}
 
 	returnModel := Model{

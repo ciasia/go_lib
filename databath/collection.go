@@ -5,10 +5,12 @@ import (
 )
 
 type Collection struct {
-	Fields    map[string]Field
-	FieldSets map[string][]FieldSetFieldDef
-	Hooks     []Hook
-	TableName string
+	Fields         map[string]Field
+	FieldSets      map[string][]FieldSetFieldDef
+	CustomFields   map[string]FieldSetFieldDef
+	Hooks          []Hook
+	TableName      string
+	SearchPrefixes map[string]*SearchPrefix
 }
 
 func (c *Collection) GetFieldSet(fieldSetNamePointer *string) ([]FieldSetFieldDef, error) {
@@ -26,4 +28,10 @@ func (c *Collection) GetFieldSet(fieldSetNamePointer *string) ([]FieldSetFieldDe
 	log.Printf("Using fieldset: %s.%s\n", c.TableName, fieldSetName)
 
 	return fields, nil
+}
+
+type SearchPrefix struct {
+	Prefix    string
+	Field     Field
+	FieldName string
 }

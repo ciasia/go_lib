@@ -53,58 +53,6 @@ func GetMinimalQueryConditions(collectionName string, fieldset string) *QueryCon
 	return &qc
 }
 
-func (cq *CustomQuery) Run(bath *Bath, inFields []interface{}) ([]map[string]interface{}, error) {
-	allRows := make([]map[string]interface{}, 0, 0)
-	if len(inFields) != len(cq.InFields) {
-		return allRows, UserErrorF("Could not run query, got %d parameters, expected %d", len(inFields), len(cq.InFields))
-	}
-	dbFields := make([]string, len(inFields), len(inFields))
-	for i, field := range cq.InFields {
-		dbStr, err := field.ToDb(inFields[i])
-		if err != nil {
-			return allRows, UserErrorF("Could not run query: %s", err.Error())
-		}
-		dbFields[i] = dbStr
-	}
-	currentIndex := 0
-	replacer := func(q string) string {
-		r := dbFields[currentIndex]
-		currentIndex += 1
-		return r
-	}
-	sqlString := re_questionmark.ReplaceAllStringFunc(cq.Query, replacer)
-
-	log.Println("SQL: " + sqlString)
-	c := bath.GetConnection()
-	db := c.GetDB()
-	defer c.Release()
-	res, err := db.Query(sqlString)
-	if err != nil {
-		return allRows, err
-	}
-
-	for res.Next() {
-		thisRow := make(map[string]interface{})
-		cols := make([]interface{}, 0, 0)
-		for colName, field := range cq.OutFields {
-			r := field.GetScanReciever()
-			// r is a pointer to a pointer of the correct type (**string, **float64 etc). (NOT a *interface{}, or **interface{} which are different things)
-			thisRow[colName] = r
-			cols = append(cols, r)
-
-		}
-
-		// Scan the values - copies the row result into the value pointed by the 'rawValue'
-		err := res.Scan(cols...)
-		if err != nil {
-			return allRows, err
-		}
-
-		allRows = append(allRows, thisRow)
-	}
-	return allRows, nil
-}
-
 func (qc *QueryConditionWhere) GetConditionString(q *Query) (string, []interface{}, error) {
 	//log.Println("GetConditionString")
 
@@ -236,31 +184,52 @@ func (q *Query) makeWhereString(conditions *QueryConditions) (string, []interfac
 					conditions.where = append(conditions.where, &filterCondition)
 
 				} else {
-					allTextFields := make([]string, 0, 0)
-					for path, mappedField := range q.map_field {
-
-						if mappedField.CanSearch() {
-							allTextFields = append(allTextFields, path)
+					var usePrefixSearch bool
+					for pString, searchPrefix := range q.collection.SearchPrefixes {
+						if strings.HasPrefix(term, pString) {
+							termWithoutPrefix := term[len(pString):]
+							if re_numeric.MatchString(termWithoutPrefix) {
+								usePrefixSearch = true
+								number, _ := strconv.ParseUint(termWithoutPrefix, 10, 32)
+								filterCondition := QueryConditionWhere{
+									Field: searchPrefix.FieldName,
+									Cmp:   "LIKE",
+									Val:   number,
+								}
+								conditions.where = append(conditions.where, &filterCondition)
+								break
+							}
 						}
 					}
 
-					for _, part := range parts {
-						partVal := "%" + part + "%"
-						partGroup := make([]QueryCondition, len(allTextFields), len(allTextFields))
-						for i, fieldName := range allTextFields {
-							condition := QueryConditionWhere{
-								Field: fieldName,
-								Cmp:   "LIKE",
-								Val:   partVal,
+					if !usePrefixSearch {
+
+						allTextFields := make([]string, 0, 0)
+						for path, mappedField := range q.map_field {
+							if mappedField.CanSearch() {
+								allTextFields = append(allTextFields, path)
 							}
-							partGroup[i] = &condition
 						}
-						joined, joinedParameters, err := q.JoinConditionsWith(partGroup, " OR ")
-						if err != nil {
-							return "", joinedParameters, err
+
+						for _, part := range parts {
+							partVal := "%" + part + "%"
+							partGroup := make([]QueryCondition, len(allTextFields), len(allTextFields))
+							for i, fieldName := range allTextFields {
+								condition := QueryConditionWhere{
+									Field: fieldName,
+									Cmp:   "LIKE",
+									Val:   partVal,
+								}
+								partGroup[i] = &condition
+							}
+							joined, joinedParameters, err := q.JoinConditionsWith(partGroup, " OR ")
+							if err != nil {
+								return "", joinedParameters, err
+							}
+							strCondition := QueryConditionString{Str: joined, Parameters: joinedParameters}
+							conditions.where = append(conditions.where, &strCondition)
 						}
-						strCondition := QueryConditionString{Str: joined, Parameters: joinedParameters}
-						conditions.where = append(conditions.where, &strCondition)
+
 					}
 
 				}
