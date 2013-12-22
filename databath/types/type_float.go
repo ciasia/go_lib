@@ -30,6 +30,9 @@ func (f *FieldFloat) FromDb(stored interface{}) (interface{}, error) {
 	}
 }
 func (f *FieldFloat) ToDb(input interface{}) (string, error) {
+	if input == nil {
+		return "NULL", nil
+	}
 	inputInt, ok := input.(float64)
 	if !ok {
 		return "", MakeToDbUserErrorFromString("Must be a float")
