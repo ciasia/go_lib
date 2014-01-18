@@ -152,7 +152,7 @@ func SyncDb(db *sql.DB, model *databath.Model, now bool) {
 			params := make([]string, 0, 0)
 
 			for name, field := range collection.Fields {
-				params = append(params, name+" "+field.GetMysqlDef())
+				params = append(params, fmt.Sprintf("`%s` %s", name, field.GetMysqlDef()))
 			}
 
 			params = append(params, "PRIMARY KEY (`id`)")
