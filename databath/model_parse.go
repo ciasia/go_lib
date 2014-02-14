@@ -65,7 +65,7 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 
 	customQueries := make(map[string]*CustomQuery)
 	for queryName, rawQuery := range model.CustomQueries {
-		log.Printf("Custom Query: %s", queryName)
+		//log.Printf("Custom Query: %s", queryName)
 		cq := CustomQuery{
 			Query:     rawQuery.Query,
 			InFields:  make([]Field, len(rawQuery.InFields), len(rawQuery.InFields)),
@@ -92,7 +92,7 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 	collections := make(map[string]*Collection)
 
 	for collectionName, rawCollection := range model.Collections {
-		log.Printf("Read Collection %s\n", collectionName)
+		//log.Printf("Read Collection %s\n", collectionName)
 		fields := make(map[string]Field)
 		for fieldName, rawField := range rawCollection.Fields {
 
@@ -106,7 +106,7 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 		customFields := make(map[string]FieldSetFieldDef)
 
 		for name, rawCustomField := range rawCollection.CustomFields {
-			fsfd, err := getFieldSetFieldDef(rawCustomField)
+			fsfd, err := getFieldSetFieldDef(name, rawCustomField)
 			if err != nil {
 				log.Printf(err.Error())
 				return nil, err
@@ -130,18 +130,21 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 		if !hasIdentityFieldset {
 			_, exists := rawCollection.Fields["name"]
 			if !exists {
-				return nil, errors.New(fmt.Sprintf("No identity fieldset, and collection (%s) doesn't have a 'name' field to fall back upon.", collectionName))
+				return nil, errors.New(fmt.Sprintf("%s: No identity fieldset or 'name' field to fall back on.", collectionName))
 			}
 
 			rawCollection.FieldSets["identity"] = []string{"name"}
 		}
 
 		for name, rawSet := range rawCollection.FieldSets {
-			log.Printf("Evaluate Fieldset: %s", name)
+			//log.Printf("Evaluate Fieldset: %s", name)
 			rawSet = append(rawSet, "id")
 
 			fieldSetDefs := make([]FieldSetFieldDef, len(rawSet), len(rawSet))
 			for i, fieldName := range rawSet {
+				if fieldName[0:1] == "-" {
+					fieldName = fieldName[1:]
+				}
 
 				customField, ok := customFields[fieldName]
 				if ok {
@@ -189,7 +192,7 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 
 		if h.Raw != nil {
 			rawQuery := h.Raw
-			log.Println("Custom Query in Hook")
+			//log.Println("Custom Query in Hook")
 			cq := CustomQuery{
 				Query:     rawQuery.Query,
 				InFields:  make([]Field, len(rawQuery.InFields), len(rawQuery.InFields)),
@@ -204,7 +207,7 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 				}
 				cq.InFields[i] = field
 			}
-			log.Println("DONE")
+			//log.Println("DONE")
 			h.CustomAction = &cq
 		}
 

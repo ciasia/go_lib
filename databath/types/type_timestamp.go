@@ -5,17 +5,32 @@ import (
 	"log"
 	"math"
 	"strconv"
+	"strings"
+	"time"
 )
 
-type FieldInt struct{}
+type FieldTimestamp struct {
+	OnCreate bool
+	OnUpdate bool
+}
 
-func (f *FieldInt) GetMysqlDef() string { return "INT(11) UNSIGNED NULL" }
+func (f *FieldTimestamp) GetMysqlDef() string {
+	def := "TIMESTAMP"
 
-func (f *FieldInt) IsSearchable() bool { return false }
+	if f.OnCreate {
+		def += " CURRENT_TIMESTAMP"
+	}
+	if f.OnUpdate {
+		def += " ON UPDATE CURRENT_TIMESTAMP"
+	}
+	return def
+}
 
-func (f *FieldInt) Init(raw map[string]interface{}) error { return nil }
+func (f *FieldTimestamp) IsSearchable() bool { return false }
 
-func (f *FieldInt) FromDb(stored interface{}) (interface{}, error) {
+func (f *FieldTimestamp) Init(raw map[string]interface{}) error { return nil }
+
+func (f *FieldTimestamp) FromDb(stored interface{}) (interface{}, error) {
 	// Int64 -> Int64
 	storedInt, ok := stored.(*int64)
 	if !ok {
@@ -26,10 +41,16 @@ func (f *FieldInt) FromDb(stored interface{}) (interface{}, error) {
 	}
 	return *storedInt, nil
 }
-func (f *FieldInt) ToDb(input interface{}) (string, error) {
+func (f *FieldTimestamp) ToDb(input interface{}) (string, error) {
 	// Int64 -> Int64
 	switch input := input.(type) {
 	case string:
+		if strings.HasPrefix(input, "#now") {
+
+			t := time.Now().Unix()
+			return f.ToDb(t)
+		}
+
 		i, err := strconv.ParseUint(input, 10, 64)
 		if err != nil {
 			return "", UserErrorF("Must be an integer, could not parse string '%s': %s", input, err.Error())
@@ -63,7 +84,7 @@ func (f *FieldInt) ToDb(input interface{}) (string, error) {
 
 	return fmt.Sprintf("%d", inputInt), nil
 }
-func (f *FieldInt) GetScanReciever() interface{} {
+func (f *FieldTimestamp) GetScanReciever() interface{} {
 	var v int64
 	var vp *int64 = &v
 	return &vp

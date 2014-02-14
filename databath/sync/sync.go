@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/daemonl/go_lib/databath"
+	"github.com/daemonl/go_lib/databath/types"
 	"log"
 	"reflect"
 	"strings"
@@ -16,33 +17,51 @@ func doErr(err error) {
 }
 
 type TableStatus struct {
-	Name            string
-	Engine          string
-	Version         *uint32
-	Row_format      *string
-	Rows            *uint64
-	Avg_row_length  *uint64
-	Data_length     *uint64
-	Max_data_length *uint64
-	Index_length    *uint64
-	Data_free       *uint64
-	Auto_increment  *uint64
-	Create_time     *string
-	Update_time     *string
-	Check_time      *string
-	Collation       *string
-	Checksum        *string
-	Create_options  *string
-	Comment         *string
+	Name            string  `sql:"Name"`
+	Engine          string  `sql:"Engine"`
+	Version         *uint64 `sql:"Version"`
+	Row_format      *string `sql:"Row_format"`
+	Rows            *uint64 `sql:"Rows"`
+	Avg_row_length  *uint64 `sql:"Avg_row_length"`
+	Data_length     *uint64 `sql:"Data_length"`
+	Max_data_length *uint64 `sql:"Max_data_length"`
+	Index_length    *uint64 `sql:"Index_length"`
+	Data_free       *uint64 `sql:"Data_free"`
+	Auto_increment  *uint64 `sql:"Auto_increment"`
+	Create_time     *string `sql:"Create_time"`
+	Update_time     *string `sql:"Update_time"`
+	Check_time      *string `sql:"Check_time"`
+	Collation       *string `sql:"Collation"`
+	Checksum        *string `sql:"Checksum"`
+	Create_options  *string `sql:"Create_options"`
+	Comment         *string `sql:"Comment"`
 }
 
 type Column struct {
-	Field   string
-	Type    string
-	Null    string
-	Key     *string
-	Default *string
-	Extra   *string
+	Field   string  `sql:"Field"`
+	Type    string  `sql:"Type"`
+	Null    string  `sql:"Null"`
+	Key     *string `sql:"Key"`
+	Default *string `sql:"Default"`
+	Extra   *string `sql:"Extra"`
+}
+
+type Index struct {
+	ConstraintName       string  `sql:"CONSTRAINT_NAME"`
+	TableName            *string `sql:"TABLE_NAME"`
+	ConstraintType       *string `sql:"CONSTRAINT_TYPE"`
+	ColumnName           *string `sql:"COLUMN_NAME"`
+	ReferencedTableName  *string `sql:"REFERENCED_TABLE_NAME"`
+	ReferencedColumnName *string `sql:"REFERENCED_COLUMN_NAME"`
+	Used                 bool
+}
+
+type SyncError struct {
+	Message string
+}
+
+func (e *SyncError) Error() string {
+	return e.Message
 }
 
 var execString string = ""
@@ -61,8 +80,10 @@ func (c *Column) GetString() string {
 	return strings.ToUpper(built)
 }
 
-func ScanToStruct(res *sql.Rows, obj interface{}) error {
-
+func ScanToStruct(res *sql.Rows, obj interface{}, tag string) error {
+	if len(tag) == 0 {
+		tag = "sql"
+	}
 	rv := reflect.ValueOf(obj)
 	rt := reflect.TypeOf(obj)
 
@@ -73,13 +94,32 @@ func ScanToStruct(res *sql.Rows, obj interface{}) error {
 	valueElm := rv.Elem()
 
 	maxElements := rt.Elem().NumField()
-	scanVals := make([]interface{}, maxElements, maxElements)
-	for i := 0; i < maxElements; i++ {
-
-		interf := valueElm.Field(i).Addr().Interface()
-		scanVals[i] = interf
+	//scanVals := make([]interface{}, maxElements, maxElements)
+	cols, err := res.Columns()
+	if err != nil {
+		return err
 	}
-	err := res.Scan(scanVals...)
+
+	scanVals := map[string]interface{}{}
+
+	for i := 0; i < maxElements; i++ {
+		interf := valueElm.Field(i).Addr().Interface()
+		sqlTag := valueElm.Type().Field(i).Tag.Get(tag)
+		if len(sqlTag) < 1 || sqlTag == "-" {
+			continue
+		}
+		scanVals[sqlTag] = interf
+	}
+	orderedScanVals := make([]interface{}, len(cols), len(cols))
+	for i, colName := range cols {
+		interfPtr, ok := scanVals[colName]
+		if !ok {
+			return &SyncError{fmt.Sprintf("SQL Column '%s' had no matching struct tag", colName)}
+		}
+		orderedScanVals[i] = interfPtr
+	}
+	err = res.Scan(orderedScanVals...)
+
 	if err != nil {
 		return err
 	}
@@ -111,39 +151,122 @@ func SyncDb(db *sql.DB, model *databath.Model, now bool) {
 
 	for res.Next() {
 		table := TableStatus{}
-		err := ScanToStruct(res, &table)
+		err := ScanToStruct(res, &table, "sql")
 		doErr(err)
 		MustExecF(now, db, "ALTER TABLE %s ENGINE = 'InnoDB'", table.Name)
 	}
 	res.Close()
 
-	for name, collection := range model.Collections {
-		log.Printf("COLLECTION: %s\n", name)
-		res, err := db.Query(`SHOW TABLE STATUS WHERE Name = ?`, name)
+	for collectionName, collection := range model.Collections {
+		log.Printf("COLLECTION: %s\n", collectionName)
+		res, err := db.Query(`SHOW TABLE STATUS WHERE Name = ?`, collectionName)
 		doErr(err)
 		if res.Next() {
 			log.Println("UPDATE TABLE")
 			// UPDATE!
 
-			for colName, field := range collection.Fields {
-				showRes, err := db.Query(`SHOW COLUMNS FROM `+name+` WHERE Field = ?`, colName)
+			log.Println("Get table info")
+			indexRes, err := db.Query(`
+SELECT
+  c.CONSTRAINT_NAME,
+  c.TABLE_NAME,
+  c.CONSTRAINT_TYPE,
+  k.COLUMN_NAME,
+  k.REFERENCED_TABLE_NAME,
+  k.REFERENCED_COLUMN_NAME 
+FROM information_schema.TABLE_CONSTRAINTS c
+LEFT JOIN information_schema.KEY_COLUMN_USAGE k 
+  ON c.CONSTRAINT_NAME = k.CONSTRAINT_NAME 
+  AND c.TABLE_SCHEMA = k.TABLE_SCHEMA 
+  AND c.TABLE_NAME = k.TABLE_NAME 
+WHERE c.TABLE_SCHEMA = DATABASE() AND c.TABLE_NAME = "` + collectionName + `";
+`)
 
+			doErr(err)
+			indexes := []*Index{}
+			for indexRes.Next() {
+				index := Index{}
+				err := ScanToStruct(indexRes, &index, "sql")
+				doErr(err)
+				indexes = append(indexes, &index)
+			}
+
+			log.Println("Scan Cols")
+
+			deferredStatements := []string{}
+
+			for colName, field := range collection.Fields {
+				log.Printf("Scan %s.%s\n", collectionName, colName)
+
+				showRes, err := db.Query(`SHOW COLUMNS FROM `+collectionName+` WHERE Field = ?`, colName)
 				doErr(err)
 				if showRes.Next() {
 					col := Column{}
-					err := ScanToStruct(showRes, &col)
+					err := ScanToStruct(showRes, &col, "sql")
 					doErr(err)
 					colStr := col.GetString()
 					modelStr := field.GetMysqlDef()
 					if colStr != modelStr {
 						log.Printf("'%s' '%s'\n", colStr, modelStr)
 						MustExecF(now, db, "ALTER TABLE %s CHANGE COLUMN %s %s %s",
-							name, colName, colName, modelStr)
+							collectionName, colName, colName, modelStr)
 					}
 				} else {
-					MustExecF(now, db, "ALTER TABLE %s ADD `%s` %s", name, colName, field.GetMysqlDef())
+					MustExecF(now, db, "ALTER TABLE %s ADD `%s` %s", collectionName, colName, field.GetMysqlDef())
 				}
 				showRes.Close()
+
+				refField, ok := field.(*types.FieldRef)
+				if ok {
+					var matchedIndex *Index = nil
+					for _, index := range indexes {
+						// If Matches
+						if colName == *index.ColumnName && *index.ReferencedTableName == refField.Collection {
+							matchedIndex = index
+							matchedIndex.Used = true
+							break
+						}
+
+					}
+
+					if matchedIndex == nil {
+						// Create It.
+						// Is it creatable with the current data?
+						badRowsRes, err := db.Query(fmt.Sprintf(`SELECT id, %s FROM %s WHERE %s NOT IN (SELECT %s FROM %s)`, colName, collectionName, colName, "id", refField.Collection))
+						if err != nil {
+							log.Printf("Error on FK check for %s.%s\n", collectionName, colName)
+							doErr(err)
+						}
+
+						hasBad := false
+						for badRowsRes.Next() {
+							hasBad = true
+							id := 0
+							fkVal := 0
+							badRowsRes.Scan(&id, &fkVal)
+							log.Printf("Foreign Key Test Fail: Entry %d for %s.%s references %s.id = %d, which doesn't exist\n", id, collectionName, colName, refField.Collection, fkVal)
+						}
+						badRowsRes.Close()
+						if hasBad {
+							panic("Foreign Key Failure, see above.")
+						}
+
+						deferredStatements = append(deferredStatements, fmt.Sprintf(`ALTER TABLE %s 
+						ADD CONSTRAINT fk_%s_%s_%s_%s 
+						FOREIGN KEY (%s) 
+						REFERENCES %s(%s)`, collectionName, collectionName, colName, refField.Collection, "id", colName, refField.Collection, "id"))
+
+					}
+				}
+			}
+			for _, index := range indexes {
+				if !index.Used && *index.ConstraintType == "FOREIGN KEY" {
+					MustExecF(now, db, `
+						ALTER TABLE %s DROP FOREIGN KEY %s`, collectionName, index.ConstraintName)
+				}
+			}
+			for _, statement := range deferredStatements {
+				MustExecF(now, db, statement)
 			}
 
 		} else {
@@ -157,10 +280,11 @@ func SyncDb(db *sql.DB, model *databath.Model, now bool) {
 
 			params = append(params, "PRIMARY KEY (`id`)")
 
-			MustExecF(now, db, "CREATE TABLE %s (%s)", name, strings.Join(params, ", "))
+			MustExecF(now, db, "CREATE TABLE %s (%s)", collectionName, strings.Join(params, ", "))
 		}
 		res.Close()
 	}
-	fmt.Println("==========")
-	fmt.Println(execString)
+
+	log.Println("==========")
+	log.Printf("\n\n%s\n\n", execString)
 }

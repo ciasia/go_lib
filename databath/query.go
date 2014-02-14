@@ -100,6 +100,18 @@ func GetQuery(context Context, model *Model, conditions *QueryConditions) (*Quer
 	return &query, nil
 }
 
+func (q *Query) GetColNames() ([]string, error) {
+	fieldSet, err := q.collection.GetFieldSet(q.conditions.fieldset)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, len(fieldSet), len(fieldSet))
+	for i, fsfd := range fieldSet {
+		names[i] = fsfd.GetPath()
+	}
+	return names, nil
+}
+
 func (q *Query) Dump() {
 	log.Println("DUMP Field Map")
 	for i, f := range q.map_field {
