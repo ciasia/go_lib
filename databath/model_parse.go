@@ -15,9 +15,10 @@ func ParseErrF(format string, parameters ...interface{}) error {
 }
 
 type rawModel struct {
-	Collections   map[string]rawCollection  `json:"collections"`
-	CustomQueries map[string]rawCustomQuery `json:"customQueries"`
-	Hooks         []Hook                    `json:"hooks"`
+	Collections      map[string]rawCollection    `json:"collections"`
+	CustomQueries    map[string]rawCustomQuery   `json:"customQueries"`
+	DynamicFunctions map[string]*DynamicFunction `json:"dynamicFunctions"`
+	Hooks            []Hook                      `json:"hooks"`
 }
 
 type rawCollection struct {
@@ -62,6 +63,8 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	dynamicFunctions := model.DynamicFunctions
 
 	customQueries := make(map[string]*CustomQuery)
 	for queryName, rawQuery := range model.CustomQueries {
@@ -220,8 +223,9 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 	}
 
 	returnModel := Model{
-		Collections:   collections,
-		CustomQueries: customQueries,
+		Collections:      collections,
+		CustomQueries:    customQueries,
+		DynamicFunctions: dynamicFunctions,
 	}
 	log.Println("\n==========\nEnd Model Init\n==========")
 	return &returnModel, err

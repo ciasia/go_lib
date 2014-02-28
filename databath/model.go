@@ -7,8 +7,13 @@ import (
 )
 
 type Model struct {
-	Collections   map[string]*Collection
-	CustomQueries map[string]*CustomQuery
+	Collections      map[string]*Collection
+	CustomQueries    map[string]*CustomQuery
+	DynamicFunctions map[string]*DynamicFunction
+}
+
+type DynamicFunction struct {
+	Filename string `json:"filename"`
 }
 
 func (m *Model) GetIdentityString(bath *Bath, collectionName string, pk uint64) (string, error) {

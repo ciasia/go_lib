@@ -221,7 +221,8 @@ WHERE c.TABLE_SCHEMA = DATABASE() AND c.TABLE_NAME = "` + collectionName + `";
 					var matchedIndex *Index = nil
 					for _, index := range indexes {
 						// If Matches
-						if colName == *index.ColumnName && *index.ReferencedTableName == refField.Collection {
+
+						if index.ReferencedTableName != nil && colName == *index.ColumnName && *index.ReferencedTableName == refField.Collection {
 							matchedIndex = index
 							matchedIndex.Used = true
 							break
@@ -232,7 +233,7 @@ WHERE c.TABLE_SCHEMA = DATABASE() AND c.TABLE_NAME = "` + collectionName + `";
 					if matchedIndex == nil {
 						// Create It.
 						// Is it creatable with the current data?
-						badRowsRes, err := db.Query(fmt.Sprintf(`SELECT id, %s FROM %s WHERE %s NOT IN (SELECT %s FROM %s)`, colName, collectionName, colName, "id", refField.Collection))
+						badRowsRes, err := db.Query(fmt.Sprintf(`SELECT id, %s FROM %s WHERE %s IS NOT NULL AND %s NOT IN (SELECT %s FROM %s)`, colName, collectionName, colName, colName, "id", refField.Collection))
 						if err != nil {
 							log.Printf("Error on FK check for %s.%s\n", collectionName, colName)
 							doErr(err)
@@ -270,8 +271,8 @@ WHERE c.TABLE_SCHEMA = DATABASE() AND c.TABLE_NAME = "` + collectionName + `";
 			}
 
 		} else {
-			// CRAETE!
-			log.Println("CRAETE TABLE")
+			// CREATE!
+			log.Println("CREATE TABLE")
 			params := make([]string, 0, 0)
 
 			for name, field := range collection.Fields {
