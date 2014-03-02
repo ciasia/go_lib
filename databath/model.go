@@ -13,7 +13,8 @@ type Model struct {
 }
 
 type DynamicFunction struct {
-	Filename string `json:"filename"`
+	Filename   string   `json:"filename"`
+	Parameters []string `json:"parameters"`
 }
 
 func (m *Model) GetIdentityString(bath *Bath, collectionName string, pk uint64) (string, error) {
