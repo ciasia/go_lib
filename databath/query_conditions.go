@@ -77,7 +77,7 @@ func (qc *QueryConditionWhere) GetConditionString(q *Query) (string, []interface
 			length := s.Len()
 			escapedSlice := make([]string, length, length)
 			for i := 0; i < length; i++ {
-				dbVal, err := field.field.ToDb(s.Index(i).Interface())
+				dbVal, err := field.field.ToDb(s.Index(i).Interface(), q.context)
 				if err != nil {
 					return "", parameters, err
 				}
@@ -92,7 +92,7 @@ func (qc *QueryConditionWhere) GetConditionString(q *Query) (string, []interface
 		}
 
 	} else if qc.Cmp == "=" || qc.Cmp == "!=" || qc.Cmp == "<=" || qc.Cmp == ">=" || qc.Cmp == "<" || qc.Cmp == ">" {
-		dbVal, err := field.field.ToDb(qc.Val)
+		dbVal, err := field.field.ToDb(qc.Val, q.context)
 		if err != nil {
 
 			return "", parameters, UserErrorF("%T.ToDb Error: %s", field.field, err.Error())
@@ -100,7 +100,7 @@ func (qc *QueryConditionWhere) GetConditionString(q *Query) (string, []interface
 		parameters = append(parameters, dbVal)
 		return fmt.Sprintf("`%s`.`%s` %s ?", field.table.alias, field.fieldNameInTable, qc.Cmp), parameters, nil
 	} else if qc.Cmp == "LIKE" {
-		dbVal, err := field.field.ToDb(qc.Val)
+		dbVal, err := field.field.ToDb(qc.Val, q.context)
 		if err != nil {
 			return "", parameters, err
 		}

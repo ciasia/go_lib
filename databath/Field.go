@@ -4,9 +4,49 @@ import (
 	"errors"
 	"fmt"
 	"github.com/daemonl/go_lib/databath/types"
+	"log"
 )
 
-type Field interface {
+type Field struct {
+	Impl       FieldType
+	Raw        map[string]interface{}
+	OnCreate   *interface{}
+	Path       string
+	Collection *Collection
+}
+
+func (f *Field) Init(raw map[string]interface{}) error {
+	f.Raw = raw
+	defaultRaw, ok := raw["onCreate"]
+	if ok {
+		f.OnCreate = &defaultRaw
+	}
+	err := f.Impl.Init(raw)
+	return err
+}
+
+func (f *Field) FromDb(raw interface{}) (interface{}, error)           { return f.Impl.FromDb(raw) }
+func (f *Field) ToDb(raw interface{}, context Context) (string, error) { return f.Impl.ToDb(raw) }
+func (f *Field) GetScanReciever() interface{}                          { return f.Impl.GetScanReciever() }
+func (f *Field) IsSearchable() bool                                    { return f.Impl.IsSearchable() }
+func (f *Field) GetMysqlDef() string                                   { return f.Impl.GetMysqlDef() }
+
+func (f *Field) GetDefault(context Context) (string, error) {
+	if f.OnCreate == nil {
+		return "", nil
+	}
+
+	strVal, isStr := (*f.OnCreate).(string)
+	if isStr {
+		log.Println("IS STRING")
+		val := context.getValueFor(strVal)
+		return f.Impl.ToDb(val)
+	}
+	log.Println("IS NOT STRING")
+	return f.Impl.ToDb(*f.OnCreate)
+}
+
+type FieldType interface {
 	Init(map[string]interface{}) error
 	FromDb(interface{}) (interface{}, error)
 	ToDb(interface{}) (string, error)
@@ -15,7 +55,7 @@ type Field interface {
 	GetMysqlDef() string
 }
 
-func FieldByType(typeString string) (Field, error) {
+func FieldByType(typeString string) (FieldType, error) {
 	switch typeString {
 	case "string":
 		return &types.FieldString{}, nil
@@ -55,7 +95,7 @@ func FieldByType(typeString string) (Field, error) {
 	}
 }
 
-func FieldFromDef(rawField map[string]interface{}) (Field, error) {
+func FieldFromDef(rawField map[string]interface{}) (*Field, error) {
 
 	// field must have type
 	fieldType, err := getFieldParamString(rawField, "type")
@@ -65,10 +105,11 @@ func FieldFromDef(rawField map[string]interface{}) (Field, error) {
 	if fieldType == nil {
 		return nil, errors.New(fmt.Sprintf("no type specified"))
 	}
-	field, err := FieldByType(*fieldType)
+	fieldImpl, err := FieldByType(*fieldType)
 	if err != nil {
 		return nil, err
 	}
+	field := &Field{Impl: fieldImpl}
 	field.Init(rawField)
 
 	return field, nil

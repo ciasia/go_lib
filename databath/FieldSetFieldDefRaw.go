@@ -19,13 +19,13 @@ func (f *FieldSetFieldDefRaw) GetPath() string { return f.Path }
 
 func (f *FieldSetFieldDefRaw) walkField(query *Query, baseTable *MappedTable, index int) error {
 
-	field, err := FieldByType(f.DataType)
+	fieldType, err := FieldByType(f.DataType)
 	if err != nil {
 		return err
 	}
 
 	sel := ""
-	mappedField, err := query.includeField(f.Path, field, baseTable, &sel)
+	mappedField, err := query.includeField(f.Path, &Field{Impl: fieldType}, baseTable, &sel)
 	mappedField.AllowSearch = false
 
 	var replError error

@@ -6,8 +6,8 @@ import (
 
 type CustomQuery struct {
 	Query     string
-	InFields  []Field
-	OutFields map[string]Field
+	InFields  []*Field
+	OutFields map[string]*Field
 	Type      string
 }
 
@@ -18,7 +18,7 @@ func (cq *CustomQuery) Run(bath *Bath, inFields []interface{}) ([]map[string]int
 	}
 	dbFields := make([]string, len(inFields), len(inFields))
 	for i, field := range cq.InFields {
-		dbStr, err := field.ToDb(inFields[i])
+		dbStr, err := field.ToDb(inFields[i], nil)
 		if err != nil {
 			return allRows, UserErrorF("Could not run query: %s", err.Error())
 		}

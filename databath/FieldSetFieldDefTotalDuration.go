@@ -68,7 +68,7 @@ func (f *FieldSetFieldDefTotalDuration) walkField(query *Query, baseTable *Mappe
 	// The pointer will only be used after this function returns
 	// Possible race condition?
 	sel := ""
-	mappedField, err := query.includeField(f.Path, &field, mappedLinkCollection, &sel)
+	mappedField, err := query.includeField(f.Path, &Field{Impl: &field}, mappedLinkCollection, &sel)
 
 	sel = fmt.Sprintf("SUM(%s.%s - %s.%s)/(60*60) AS %s",
 		mappedLinkCollection.alias,

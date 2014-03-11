@@ -12,11 +12,6 @@ type Model struct {
 	DynamicFunctions map[string]*DynamicFunction
 }
 
-type DynamicFunction struct {
-	Filename   string   `json:"filename"`
-	Parameters []string `json:"parameters"`
-}
-
 func (m *Model) GetIdentityString(bath *Bath, collectionName string, pk uint64) (string, error) {
 	fs := "identity"
 	var lim int64 = 1

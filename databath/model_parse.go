@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/daemonl/go_lib/databath/types"
 	"io"
 	"log"
 	"os"
@@ -71,8 +72,8 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 		//log.Printf("Custom Query: %s", queryName)
 		cq := CustomQuery{
 			Query:     rawQuery.Query,
-			InFields:  make([]Field, len(rawQuery.InFields), len(rawQuery.InFields)),
-			OutFields: make(map[string]Field),
+			InFields:  make([]*Field, len(rawQuery.InFields), len(rawQuery.InFields)),
+			OutFields: make(map[string]*Field),
 			Type:      rawQuery.Type,
 		}
 		for i, rawField := range rawQuery.InFields {
@@ -96,10 +97,12 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 
 	for collectionName, rawCollection := range model.Collections {
 		//log.Printf("Read Collection %s\n", collectionName)
-		fields := make(map[string]Field)
+		fields := make(map[string]*Field)
 		for fieldName, rawField := range rawCollection.Fields {
 
 			field, err := FieldFromDef(rawField)
+			field.Path = fieldName
+
 			if err != nil {
 				return nil, errors.New(fmt.Sprintf("Error parsing %s.%s - %s", collectionName, fieldName, err.Error()))
 			}
@@ -185,6 +188,7 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 			Fields:         fields,
 			FieldSets:      fieldSets,
 			TableName:      collectionName,
+			ForeignKeys:    make([]*Field, 0, 0),
 			CustomFields:   customFields,
 			SearchPrefixes: searchPrefixes,
 		}
@@ -198,8 +202,8 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 			//log.Println("Custom Query in Hook")
 			cq := CustomQuery{
 				Query:     rawQuery.Query,
-				InFields:  make([]Field, len(rawQuery.InFields), len(rawQuery.InFields)),
-				OutFields: make(map[string]Field),
+				InFields:  make([]*Field, len(rawQuery.InFields), len(rawQuery.InFields)),
+				OutFields: make(map[string]*Field),
 				Type:      rawQuery.Type,
 			}
 			for i, rawField := range rawQuery.InFields {
@@ -222,13 +226,28 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 
 	}
 
-	returnModel := Model{
+	returnModel := &Model{
 		Collections:      collections,
 		CustomQueries:    customQueries,
 		DynamicFunctions: dynamicFunctions,
 	}
+
+	for _, collection := range collections {
+		collection.Model = returnModel
+		for path, field := range collection.Fields {
+			field.Collection = collection
+			field.Path = path
+
+			refField, isRefField := field.Impl.(*types.FieldRef)
+			if !isRefField {
+				continue
+			}
+			collections[refField.Collection].ForeignKeys = append(collections[refField.Collection].ForeignKeys, field)
+		}
+	}
+
 	log.Println("\n==========\nEnd Model Init\n==========")
-	return &returnModel, err
+	return returnModel, err
 }
 
 func ReadModelFromFile(filename string) (*Model, error) {

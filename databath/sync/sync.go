@@ -216,7 +216,7 @@ WHERE c.TABLE_SCHEMA = DATABASE() AND c.TABLE_NAME = "` + collectionName + `";
 				}
 				showRes.Close()
 
-				refField, ok := field.(*types.FieldRef)
+				refField, ok := field.Impl.(*types.FieldRef)
 				if ok {
 					var matchedIndex *Index = nil
 					for _, index := range indexes {

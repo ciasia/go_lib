@@ -23,58 +23,6 @@ type Query struct {
 	context      Context
 }
 
-type MappedTable struct {
-	path       string
-	alias      string
-	collection *Collection
-}
-
-type MappedField struct {
-	path             string
-	alias            string
-	fieldNameInTable string
-	field            Field
-	table            *MappedTable
-	def              *Collection
-	selectString     *string
-	AllowSearch      bool
-}
-
-func (mf *MappedField) CanSearch() bool {
-	if !mf.field.IsSearchable() {
-		return false
-	}
-	return mf.AllowSearch
-}
-
-type Context interface {
-	getValueFor(string) interface{}
-}
-
-type MapContext struct {
-	Fields map[string]interface{}
-}
-
-func (mc *MapContext) getValueFor(key string) interface{} {
-	val, ok := mc.Fields[key]
-	if !ok {
-		return key
-	}
-	return val
-}
-
-type QueryUserError struct {
-	Message string
-}
-
-func (ue QueryUserError) Error() string {
-	return ue.Message
-}
-
-func UserErrorF(format string, params ...interface{}) QueryUserError {
-	return QueryUserError{fmt.Sprintf(format, params...)}
-}
-
 func GetQuery(context Context, model *Model, conditions *QueryConditions) (*Query, error) {
 	collection, ok := model.Collections[conditions.collection]
 	if !ok {
@@ -208,7 +156,7 @@ func (q *Query) BuildUpdate(changeset map[string]interface{}) (string, []interfa
 			return "", allParameters, UserErrorF("Attempt to update field not in fieldset: '%s'", path)
 		}
 
-		dbVal, err := field.field.ToDb(value)
+		dbVal, err := field.field.ToDb(value, q.context)
 		if err != nil {
 			return "", allParameters, UserErrorF("Error converting %s to database value: %s", path, err.Error())
 		}
@@ -247,6 +195,8 @@ func (q *Query) BuildUpdate(changeset map[string]interface{}) (string, []interfa
 	return sql, allParameters, nil
 }
 
+// BuildInsert creates an INSERT INTO statement, the requested key,val is given as the first parameter
+// Can only insert one table at a time.
 func (q *Query) BuildInsert(valueMap map[string]interface{}) (string, []interface{}, error) {
 	values := make([]string, 0, 0)
 	fields := make([]string, 0, 0)
@@ -266,7 +216,7 @@ func (q *Query) BuildInsert(valueMap map[string]interface{}) (string, []interfac
 			q.Dump()
 			return "", queryParameters, UserErrorF("Attempt to update field not in fieldset: '%s'", path)
 		}
-		dbValue, err := field.field.ToDb(value)
+		dbValue, err := field.field.ToDb(value, q.context)
 		if err != nil {
 			return "", queryParameters, UserErrorF("Error converting %s to database value: %s", path, err.Error())
 		}
@@ -281,11 +231,35 @@ func (q *Query) BuildInsert(valueMap map[string]interface{}) (string, []interfac
 		} else {
 			queryParameters = append(queryParameters, dbValue)
 		}
-
 	}
+
+	// Default Values
+	for path, field := range q.collection.Fields {
+		log.Printf("DEFAULT: %s.%s %v\n", q.collection.TableName, path, field.OnCreate)
+		_, ok := valueMap[path]
+		if ok {
+			continue
+		}
+		dbValue, err := field.GetDefault(q.context)
+		if err != nil {
+			log.Printf("ERR in Default Value for '%s.%s' (%v): %s\n", q.collection.TableName, path, field.OnCreate, err.Error())
+			continue
+		}
+		if len(dbValue) < 1 {
+			continue
+		}
+		fields = append(fields, path)
+		values = append(values, "?")
+		queryParameters = append(queryParameters, dbValue)
+	}
+
 	sql := fmt.Sprintf("INSERT INTO `%s` (`%s`) VALUES (%s)",
 		q.collection.TableName, strings.Join(fields, "`, `"), strings.Join(values, ", "))
 	return sql, queryParameters, nil
+}
+
+func (q *Query) CheckDelete(db *sql.DB, id uint64) (*DeleteCheckResult, error) {
+	return q.collection.CheckDelete(db, id)
 }
 
 func (q *Query) BuildDelete(id uint64) (string, error) {
@@ -314,6 +288,7 @@ func (q *Query) RunQueryWithResults(bath *Bath, sqlString string, parameters []i
 	}
 	return allRows, nil
 }
+
 func (q *Query) RunQueryWithSingleResult(bath *Bath, sqlString string, parameters []interface{}) (map[string]interface{}, error) {
 	allRows, err := q.RunQueryWithResults(bath, sqlString, parameters)
 	if err != nil {
@@ -401,7 +376,7 @@ func (q *Query) includeCollection(path string, collectionName string) (*MappedTa
 
 }
 
-func (q *Query) includeField(fullName string, field Field, mappedTable *MappedTable, selectString *string) (*MappedField, error) {
+func (q *Query) includeField(fullName string, field *Field, mappedTable *MappedTable, selectString *string) (*MappedField, error) {
 	if field == nil {
 		panic("Nil Field in includeField")
 		//return nil, new QueryUserError{"Nil Field in includeField"}
@@ -429,7 +404,7 @@ func (q *Query) leftJoin(baseTable *MappedTable, prefixPath []string, tableField
 		return nil, QueryUserError{"Field " + tableField + " does not exist in " + baseTable.collection.TableName}
 	}
 	tableIncludePath := strings.Join(prefixPath, ".") + "." + tableField
-	refField := fieldDef.(*types.FieldRef)
+	refField := fieldDef.Impl.(*types.FieldRef)
 
 	existingDef, ok := q.map_table[tableIncludePath]
 	if ok {

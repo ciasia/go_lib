@@ -4,7 +4,14 @@ import ()
 
 type FieldRef struct {
 	Collection string
+	OnDelete   int
 }
+
+const (
+	RefOnDeletePrevent = iota
+	RefOnDeleteCascade
+	RefOnDeleteNull
+)
 
 func (f *FieldRef) GetMysqlDef() string { return "INT(11) UNSIGNED NULL" }
 
@@ -17,6 +24,17 @@ func (f *FieldRef) Init(raw map[string]interface{}) error {
 	}
 	collectionString := collection.(string)
 	f.Collection = collectionString
+
+	onDelete, ok := raw["onDelete"]
+	if ok {
+		if onDelete == "CASCADE" {
+			f.OnDelete = RefOnDeleteCascade
+		} else if onDelete == "NULL" {
+			f.OnDelete = RefOnDeleteNull
+		}
+	} else {
+		f.OnDelete = RefOnDeletePrevent
+	}
 	return nil
 }
 
@@ -31,9 +49,11 @@ func (f *FieldRef) FromDb(stored interface{}) (interface{}, error) {
 	}
 	return *storedInt, nil
 }
+
 func (f *FieldRef) ToDb(input interface{}) (string, error) {
 	return unsignedIntToDb(input)
 }
+
 func (f *FieldRef) GetScanReciever() interface{} {
 	var v uint64
 	var vp *uint64 = &v
