@@ -48,6 +48,14 @@ func GetQuery(context Context, model *Model, conditions *QueryConditions) (*Quer
 	return &query, nil
 }
 
+func (q *Query) GetFields() (map[string]*Field, error) {
+	fields := map[string]*Field{}
+	for _, v := range q.map_field {
+		fields[v.path] = v.field
+	}
+	return fields, nil
+}
+
 func (q *Query) GetColNames() ([]string, error) {
 	fieldSet, err := q.collection.GetFieldSet(q.conditions.fieldset)
 	if err != nil {
@@ -349,8 +357,10 @@ func (q *Query) ConvertResultRow(rs *sql.Rows) (map[string]interface{}, error) {
 
 			enumField, isEnumField := mappedField.field.Impl.(*types.FieldEnum)
 			if isEnumField {
-				pathMap[path+"_STRING"] = enumField.Choices[from.(string)]
-				log.Println(enumField.Choices)
+				if str, ok := from.(string); ok {
+					pathMap[path+"_STRING"] = enumField.Choices[str]
+					log.Println(enumField.Choices)
+				}
 			}
 		}
 	}
@@ -392,6 +402,7 @@ func (q *Query) includeField(fullName string, field *Field, mappedTable *MappedT
 	fieldNameInTable := fieldParts[len(fieldParts)-1]
 
 	mf := MappedField{
+		path:             fullName,
 		alias:            alias,
 		field:            field,
 		fieldNameInTable: fieldNameInTable,
