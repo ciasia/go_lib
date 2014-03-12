@@ -84,7 +84,7 @@ func FieldByType(typeString string) (FieldType, error) {
 	case "file":
 		return &types.FieldFile{}, nil
 	case "enum":
-		return &types.FieldString{}, nil
+		return &types.FieldEnum{}, nil
 	case "auto_timestamp":
 		return &types.FieldInt{}, nil
 	case "timestamp":
@@ -110,7 +110,10 @@ func FieldFromDef(rawField map[string]interface{}) (*Field, error) {
 		return nil, err
 	}
 	field := &Field{Impl: fieldImpl}
-	field.Init(rawField)
+	err = field.Init(rawField)
+	if err != nil {
+		return nil, err
+	}
 
 	return field, nil
 }

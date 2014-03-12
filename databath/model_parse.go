@@ -79,14 +79,14 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 		for i, rawField := range rawQuery.InFields {
 			field, err := FieldFromDef(rawField)
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("Error parsing %s.[in][%s] - %s", queryName, i, err.Error()))
+				return nil, errors.New(fmt.Sprintf("Error parsing Raw Query %s.[in][%d] - %s", queryName, i, err.Error()))
 			}
 			cq.InFields[i] = field
 		}
 		for i, rawField := range rawQuery.OutFields {
 			field, err := FieldFromDef(rawField)
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("Error parsing %s.[out][%s] - %s", queryName, i, err.Error()))
+				return nil, errors.New(fmt.Sprintf("Error parsing Raw Query %s.[out][%d] - %s", queryName, i, err.Error()))
 			}
 			cq.OutFields[i] = field
 		}
@@ -101,11 +101,11 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 		for fieldName, rawField := range rawCollection.Fields {
 
 			field, err := FieldFromDef(rawField)
-			field.Path = fieldName
 
 			if err != nil {
 				return nil, errors.New(fmt.Sprintf("Error parsing %s.%s - %s", collectionName, fieldName, err.Error()))
 			}
+			field.Path = fieldName
 			fields[fieldName] = field
 		}
 

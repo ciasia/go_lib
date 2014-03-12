@@ -20,7 +20,7 @@ func (f *FieldRef) IsSearchable() bool { return false }
 func (f *FieldRef) Init(raw map[string]interface{}) error {
 	collection, ok := raw["collection"]
 	if !ok {
-		return ModelDefinitionError{"Field has no collection", ""}
+		return ModelDefinitionError{"Ref Field has no key 'collection'", ""}
 	}
 	collectionString := collection.(string)
 	f.Collection = collectionString

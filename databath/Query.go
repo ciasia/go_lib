@@ -346,6 +346,12 @@ func (q *Query) ConvertResultRow(rs *sql.Rows) (map[string]interface{}, error) {
 				return nil, err
 			}
 			pathMap[path] = from
+
+			enumField, isEnumField := mappedField.field.Impl.(*types.FieldEnum)
+			if isEnumField {
+				pathMap[path+"_STRING"] = enumField.Choices[from.(string)]
+				log.Println(enumField.Choices)
+			}
 		}
 	}
 
