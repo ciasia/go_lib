@@ -19,6 +19,7 @@ type MappedField struct {
 	path             string
 	alias            string
 	fieldNameInTable string
+	fieldSetFieldDef FieldSetFieldDef
 	field            *Field
 	table            *MappedTable
 	def              *Collection

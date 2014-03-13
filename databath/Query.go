@@ -6,6 +6,7 @@ import (
 	"github.com/daemonl/go_lib/databath/types"
 	"log"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -110,7 +111,7 @@ func (q *Query) BuildSelect() (string, []interface{}, error) {
 	//log.Printf("==END Select==")
 
 	//log.Printf("==START Where==")
-	whereString, whereParameters, err := q.makeWhereString(q.conditions)
+	whereString, whereParameters, havingString, havingParameters, err := q.makeWhereString(q.conditions)
 	if err != nil {
 		return "", allParameters, err
 	}
@@ -125,15 +126,17 @@ func (q *Query) BuildSelect() (string, []interface{}, error) {
     %s
     %s 
     GROUP BY t0.id 
+    %s
     %s 
     `,
 		strings.Join(selectFields, ", "),
 		q.collection.TableName,
 		joinString,
 		whereString,
+		havingString,
 		pageString)
 
-	return sql, whereParameters, nil
+	return sql, append(whereParameters, havingParameters...), nil
 }
 
 func (q *Query) BuildUpdate(changeset map[string]interface{}) (string, []interface{}, error) {
@@ -149,7 +152,7 @@ func (q *Query) BuildUpdate(changeset map[string]interface{}) (string, []interfa
 		}
 	}
 
-	whereString, whereParameters, err := q.makeWhereString(q.conditions)
+	whereString, whereParameters, _, _, err := q.makeWhereString(q.conditions)
 	if err != nil {
 		return "", allParameters, UserErrorF("Building where conditions %s", err.Error())
 	}
@@ -392,7 +395,7 @@ func (q *Query) includeCollection(path string, collectionName string) (*MappedTa
 
 }
 
-func (q *Query) includeField(fullName string, field *Field, mappedTable *MappedTable, selectString *string) (*MappedField, error) {
+func (q *Query) includeField(fullName string, field *Field, fieldSetFieldDef FieldSetFieldDef, mappedTable *MappedTable, selectString *string) (*MappedField, error) {
 	if field == nil {
 		panic("Nil Field in includeField")
 		//return nil, new QueryUserError{"Nil Field in includeField"}
@@ -405,6 +408,7 @@ func (q *Query) includeField(fullName string, field *Field, mappedTable *MappedT
 		path:             fullName,
 		alias:            alias,
 		field:            field,
+		fieldSetFieldDef: fieldSetFieldDef,
 		fieldNameInTable: fieldNameInTable,
 		table:            mappedTable,
 		selectString:     selectString,
@@ -440,4 +444,219 @@ func (q *Query) leftJoin(baseTable *MappedTable, prefixPath []string, tableField
 			tableField))
 		return includedCollection, nil
 	}
+}
+
+func (q *Query) JoinConditionsWith(conditions []QueryCondition, joiner string) (whereString string, whereParameters []interface{}, havingString string, havingParameters []interface{}, returnErr error) {
+
+	whereStrings := make([]string, 0, 0)
+	havingStrings := make([]string, 0, 0)
+	whereParameters = make([]interface{}, 0, 0)
+	havingParameters = make([]interface{}, 0, 0)
+	whereString = ""
+	havingString = ""
+	conditionString := ""
+	returnErr = nil
+
+	var conditionParameters []interface{}
+	var err error
+	var isAggregate bool
+	for i, condition := range conditions {
+		conditionString, conditionParameters, isAggregate, err = condition.GetConditionString(q)
+		if err != nil {
+			returnErr = UserErrorF("building condition %d: %s", i, err.Error())
+			log.Printf("Where Condition Error: %s", err)
+			return //BAD
+		}
+
+		if isAggregate {
+			for _, p := range conditionParameters {
+				havingParameters = append(havingParameters, p)
+			}
+			havingStrings = append(havingStrings, conditionString)
+
+		} else {
+			for _, p := range conditionParameters {
+				whereParameters = append(whereParameters, p)
+			}
+			whereStrings = append(whereStrings, conditionString)
+		}
+
+	}
+	whereString = strings.Join(whereStrings, joiner)
+	havingString = strings.Join(havingStrings, joiner)
+	return //GOOD
+}
+
+func (q *Query) makeWhereString(conditions *QueryConditions) (whereString string, whereParameters []interface{}, havingString string, havingParameters []interface{}, returnErr error) {
+	log.Println("Begin makeWhereString")
+
+	whereString = ""
+	havingString = ""
+	whereParameters = make([]interface{}, 0, 0)
+	havingParameters = make([]interface{}, 0, 0)
+
+	if conditions.where == nil {
+		conditions.where = make([]QueryCondition, 0, 0)
+		log.Println("Add empty conditions.where")
+	}
+	if conditions.pk != nil {
+		log.Println("Add PK condition")
+		pkCondition := QueryConditionWhere{
+			Field: "id",
+			Cmp:   "=",
+			Val:   *conditions.pk,
+		}
+		conditions.where = append(conditions.where, &pkCondition)
+	}
+
+	if conditions.filter != nil {
+		for fieldName, value := range *conditions.filter {
+			filterCondition := QueryConditionWhere{
+				Field: fieldName,
+				Cmp:   "=",
+				Val:   value,
+			}
+			conditions.where = append(conditions.where, &filterCondition)
+		}
+
+	}
+
+	if conditions.search != nil {
+
+		for field, term := range conditions.search {
+
+			parts := re_notAlphaNumeric.Split(term, -1)
+
+			if field == "*" {
+				if re_numeric.MatchString(term) {
+					id, _ := strconv.ParseUint(term, 10, 32)
+					filterCondition := QueryConditionWhere{
+						Field: "id",
+						Cmp:   "=",
+						Val:   id,
+					}
+					conditions.where = append(conditions.where, &filterCondition)
+
+				} else {
+					var usePrefixSearch bool
+					for pString, searchPrefix := range q.collection.SearchPrefixes {
+						if strings.HasPrefix(term, pString) {
+							termWithoutPrefix := term[len(pString):]
+							if re_numeric.MatchString(termWithoutPrefix) {
+								usePrefixSearch = true
+								number, _ := strconv.ParseUint(termWithoutPrefix, 10, 32)
+								filterCondition := QueryConditionWhere{
+									Field: searchPrefix.FieldName,
+									Cmp:   "LIKE",
+									Val:   number,
+								}
+								conditions.where = append(conditions.where, &filterCondition)
+								break
+							}
+						}
+					}
+
+					if !usePrefixSearch {
+
+						allTextFields := make([]string, 0, 0)
+						for path, mappedField := range q.map_field {
+							if mappedField.CanSearch() {
+								allTextFields = append(allTextFields, path)
+							}
+						}
+
+						for _, part := range parts {
+							partVal := "%" + part + "%"
+							partGroup := make([]QueryCondition, len(allTextFields), len(allTextFields))
+							for i, fieldName := range allTextFields {
+								condition := QueryConditionWhere{
+									Field: fieldName,
+									Cmp:   "LIKE",
+									Val:   partVal,
+								}
+								partGroup[i] = &condition
+							}
+							j1, jp1, _, _, err := q.JoinConditionsWith(partGroup, " OR ")
+							if err != nil {
+								returnErr = err
+								return //BAD
+							}
+							strCondition := QueryConditionString{Str: j1, Parameters: jp1}
+							conditions.where = append(conditions.where, &strCondition)
+						}
+
+					}
+
+				}
+			} else {
+				partGroup := make([]QueryCondition, len(parts), len(parts))
+				for i, p := range parts {
+					qc := QueryConditionWhere{
+						Field: field,
+						Cmp:   "LIKE",
+						Val:   p,
+					}
+					partGroup[i] = &qc
+				}
+				joined, joinedParameters, _, _, err := q.JoinConditionsWith(partGroup, " OR ")
+				if err != nil {
+					returnErr = err
+					return //BAD
+				}
+				strCondition := QueryConditionString{Str: joined, Parameters: joinedParameters}
+				conditions.where = append(conditions.where, &strCondition)
+			}
+
+		}
+	}
+
+	whereString, whereParameters, havingString, havingParameters, err := q.JoinConditionsWith(conditions.where, " AND ")
+	if err != nil {
+		returnErr = err
+		return //BAD
+	}
+	if len(whereString) > 1 {
+		whereString = "WHERE " + whereString
+	}
+	if len(havingString) > 1 {
+		havingString = "HAVING " + havingString
+	}
+
+	return //GOOD
+}
+
+func (q *Query) makePageString(conditions *QueryConditions) (string, error) {
+	str := ""
+
+	sorts := make([]string, len(conditions.sort), len(conditions.sort))
+	for i, sort := range conditions.sort {
+		direction := ""
+		if sort.Direction < 0 {
+			direction = "DESC"
+		} else {
+			direction = "ASC"
+		}
+
+		field, ok := q.map_field[sort.FieldName]
+		if !ok {
+			return "", UserErrorF("Sort referenced non mapped field %s", sort.FieldName)
+		}
+		sorts[i] = field.alias + " " + direction
+	}
+
+	if len(sorts) > 0 {
+		str = str + " ORDER BY " + strings.Join(sorts, ", ")
+	}
+
+	if conditions.limit != nil {
+		if *conditions.limit > 0 {
+			str = str + fmt.Sprintf(" LIMIT %d", *conditions.limit)
+		}
+	}
+
+	if conditions.offset != nil {
+		str = str + fmt.Sprintf(" OFFSET %d", *conditions.offset)
+	}
+
+	return str, nil
 }

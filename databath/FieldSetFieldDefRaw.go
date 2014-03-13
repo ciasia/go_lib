@@ -25,7 +25,7 @@ func (f *FieldSetFieldDefRaw) walkField(query *Query, baseTable *MappedTable, in
 	}
 
 	sel := ""
-	mappedField, err := query.includeField(f.Path, &Field{Impl: fieldType}, baseTable, &sel)
+	mappedField, err := query.includeField(f.Path, &Field{Impl: fieldType}, f, baseTable, &sel)
 	mappedField.AllowSearch = false
 
 	var replError error

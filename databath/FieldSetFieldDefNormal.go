@@ -37,7 +37,7 @@ func (f *FieldSetFieldDefNormal) walkField(query *Query, baseTable *MappedTable,
 	if index == len(f.pathSplit)-1 {
 		// Then this is the last part of a a.b.c, so in the query it appears: "[table b's alias].c AS [field c's alias]"
 		//log.Printf("LAST PART %s", strings.Join(f.pathSplit, "."))
-		fieldAlias, _ := query.includeField(f.path, field, baseTable, nil)
+		fieldAlias, _ := query.includeField(f.path, field, f, baseTable, nil)
 		_ = fieldAlias
 		return nil
 	} else {
