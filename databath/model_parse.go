@@ -38,23 +38,6 @@ type rawSearchPrefix struct {
 	Field string `json:"field"`
 }
 
-type Hook struct {
-	Collection   string                 `json:"collection"`
-	When         HookWhen               `json:"when"`
-	Set          map[string]interface{} `json:"set"`
-	Email        *HookEmail             `json:"email"`
-	Raw          *rawCustomQuery        `json:"raw"`
-	CustomAction *CustomQuery
-}
-type HookWhen struct {
-	Field string `json:"field"`
-	What  string `json:"what"`
-}
-type HookEmail struct {
-	Recipient string `json:"recipient"`
-	Template  string `json:"template"`
-}
-
 func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 	log.Println("\n==========\nBegin Model Init\n==========")
 

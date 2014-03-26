@@ -7,7 +7,7 @@ import ()
 //////////
 type FieldBool struct{}
 
-func (f *FieldBool) GetMysqlDef() string { return "TINYINT(1) NULL" }
+func (f *FieldBool) GetMysqlDef() string { return "TINYINT(1) DEFAULT 0" }
 
 func (f *FieldBool) IsSearchable() bool { return false }
 

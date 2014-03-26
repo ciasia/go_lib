@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/daemonl/go_lib/databath/types"
-	"log"
 )
 
 type Field struct {
@@ -17,9 +16,9 @@ type Field struct {
 
 func (f *Field) Init(raw map[string]interface{}) error {
 	f.Raw = raw
-	defaultRaw, ok := raw["onCreate"]
+	onCreate, ok := raw["onCreate"]
 	if ok {
-		f.OnCreate = &defaultRaw
+		f.OnCreate = &onCreate
 	}
 	err := f.Impl.Init(raw)
 	return err
@@ -38,11 +37,9 @@ func (f *Field) GetDefault(context Context) (string, error) {
 
 	strVal, isStr := (*f.OnCreate).(string)
 	if isStr {
-		log.Println("IS STRING")
 		val := context.getValueFor(strVal)
 		return f.Impl.ToDb(val)
 	}
-	log.Println("IS NOT STRING")
 	return f.Impl.ToDb(*f.OnCreate)
 }
 

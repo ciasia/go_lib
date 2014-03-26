@@ -30,11 +30,10 @@ func (f *FieldSetFieldDefRaw) walkField(query *Query, baseTable *MappedTable, in
 
 	var replError error
 	replFunc := func(in string) string {
-		log.Println("Walk: " + in)
 		parts := strings.Split(in[1:len(in)-1], ".")
 		currentTable := baseTable
-		for i, tableJump := range parts[:len(parts)-1] {
-			log.Println("Walk " + tableJump)
+		for i, _ := range parts[:len(parts)-1] {
+
 			currentTable, err = query.leftJoin(currentTable, parts[:i+1], parts[i])
 			if err != nil {
 				replError = err
@@ -46,11 +45,11 @@ func (f *FieldSetFieldDefRaw) walkField(query *Query, baseTable *MappedTable, in
 	}
 
 	joinReplFunc := func(in string) string {
-		log.Println("Collection Walk: " + in)
+
 		collectionName := in[1 : len(in)-1]
 		mapped, ok := query.map_table[collectionName]
 		if ok {
-			log.Printf("Alias: %s->%s\n", collectionName, mapped.alias)
+
 			return mapped.alias
 
 		}

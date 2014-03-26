@@ -2,6 +2,7 @@ package databath
 
 import (
 	"database/sql"
+	"log"
 )
 
 type Bath struct {
@@ -22,11 +23,14 @@ func (bath *Bath) Connect() (*sql.DB, error) {
 	return db, nil
 }
 
-type Tenant struct {
+func (bath *Bath) GetConnection() *Connection {
+	c := <-bath.conn
+	log.Println("GET CONNECTION")
+	return c
 }
 
-type User struct {
-	Tenant *Tenant
+func (bath *Bath) ReleaseConnection(c *Connection) {
+	bath.conn <- c
 }
 
 type Connection struct {
@@ -34,11 +38,13 @@ type Connection struct {
 	bath *Bath
 }
 
-func (c *Connection) Release() {
-	c.bath.ReleaseConnection(c)
+func (c *Connection) GetDB() *sql.DB {
+	return c.db
 }
-func (bath *Bath) ReleaseConnection(c *Connection) {
-	bath.conn <- c
+
+func (c *Connection) Release() {
+	log.Println("RELEASE CONNECTION")
+	c.bath.ReleaseConnection(c)
 }
 
 func RunABath(driverName string, connectionString string, size int) *Bath {
@@ -62,13 +68,4 @@ func RunABath(driverName string, connectionString string, size int) *Bath {
 		bath.conn <- &conn
 	}
 	return &bath
-}
-
-func (bath *Bath) GetConnection() *Connection {
-	c := <-bath.conn
-	return c
-}
-
-func (c *Connection) GetDB() *sql.DB {
-	return c.db
 }

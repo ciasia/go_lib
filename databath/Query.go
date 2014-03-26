@@ -121,14 +121,7 @@ func (q *Query) BuildSelect() (string, []interface{}, error) {
 		return "", allParameters, err
 	}
 	joinString := strings.Join(q.joins, "\n  ")
-	sql := fmt.Sprintf(`
-    SELECT %s FROM %s t0 
-    %s
-    %s 
-    GROUP BY t0.id 
-    %s
-    %s 
-    `,
+	sql := fmt.Sprintf(`SELECT %s FROM %s t0 %s %s GROUP BY t0.id %s %s`,
 		strings.Join(selectFields, ", "),
 		q.collection.TableName,
 		joinString,
