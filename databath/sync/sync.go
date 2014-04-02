@@ -236,26 +236,27 @@ WHERE c.TABLE_SCHEMA = DATABASE() AND c.TABLE_NAME = "` + collectionName + `";
 						badRowsRes, err := db.Query(fmt.Sprintf(`SELECT id, %s FROM %s WHERE %s IS NOT NULL AND %s NOT IN (SELECT %s FROM %s)`, colName, collectionName, colName, colName, "id", refField.Collection))
 						if err != nil {
 							log.Printf("Error on FK check for %s.%s\n", collectionName, colName)
-							doErr(err)
-						}
 
-						hasBad := false
-						for badRowsRes.Next() {
-							hasBad = true
-							id := 0
-							fkVal := 0
-							badRowsRes.Scan(&id, &fkVal)
-							log.Printf("Foreign Key Test Fail: Entry %d for %s.%s references %s.id = %d, which doesn't exist\n", id, collectionName, colName, refField.Collection, fkVal)
-						}
-						badRowsRes.Close()
-						if hasBad {
-							panic("Foreign Key Failure, see above.")
-						}
+						} else {
 
-						deferredStatements = append(deferredStatements, fmt.Sprintf(`ALTER TABLE %s 
-						ADD CONSTRAINT fk_%s_%s_%s_%s 
-						FOREIGN KEY (%s) 
-						REFERENCES %s(%s)`, collectionName, collectionName, colName, refField.Collection, "id", colName, refField.Collection, "id"))
+							hasBad := false
+							for badRowsRes.Next() {
+								hasBad = true
+								id := 0
+								fkVal := 0
+								badRowsRes.Scan(&id, &fkVal)
+								log.Printf("Foreign Key Test Fail: Entry %d for %s.%s references %s.id = %d, which doesn't exist\n", id, collectionName, colName, refField.Collection, fkVal)
+							}
+							badRowsRes.Close()
+							if hasBad {
+								panic("Foreign Key Failure, see above.")
+							}
+
+							deferredStatements = append(deferredStatements, fmt.Sprintf(`ALTER TABLE %s 
+								ADD CONSTRAINT fk_%s_%s_%s_%s 
+								FOREIGN KEY (%s) 
+								REFERENCES %s(%s)`, collectionName, collectionName, colName, refField.Collection, "id", colName, refField.Collection, "id"))
+						}
 
 					}
 				}

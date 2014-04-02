@@ -203,7 +203,7 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 
 		collection, ok := collections[h.Collection]
 		if !ok {
-			UserErrorF("Hook on non existing collection %s", h.Collection)
+			return nil, UserErrorF("Hook on non existing collection %s", h.Collection)
 		}
 		collection.Hooks = append(collection.Hooks, h)
 
@@ -224,6 +224,10 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 			refField, isRefField := field.Impl.(*types.FieldRef)
 			if !isRefField {
 				continue
+			}
+			_, ok := collections[refField.Collection]
+			if !ok {
+				return nil, UserErrorF("ref field %s.%s references collection %s, which doesn't exist", collection.TableName, path, refField.Collection)
 			}
 			collections[refField.Collection].ForeignKeys = append(collections[refField.Collection].ForeignKeys, field)
 		}
