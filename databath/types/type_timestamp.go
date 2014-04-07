@@ -23,6 +23,10 @@ func (f *FieldTimestamp) GetMysqlDef() string {
 	if f.OnUpdate {
 		def += " ON UPDATE CURRENT_TIMESTAMP"
 	}
+
+	if def == "TIMESTAMP" {
+		def = "TIMESTAMP NULL"
+	}
 	return def
 }
 
