@@ -5,6 +5,7 @@ import ()
 type FieldRef struct {
 	Collection string
 	OnDelete   int
+	Limit      map[string]interface{}
 }
 
 const (
@@ -34,6 +35,16 @@ func (f *FieldRef) Init(raw map[string]interface{}) error {
 		}
 	} else {
 		f.OnDelete = RefOnDeletePrevent
+	}
+
+	f.Limit = map[string]interface{}{}
+
+	rawLimit, ok := raw["limit"]
+	if ok {
+		l, ok := rawLimit.(map[string]interface{})
+		if ok {
+			f.Limit = l
+		}
 	}
 	return nil
 }
