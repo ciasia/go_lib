@@ -271,12 +271,10 @@ func (q *Query) BuildDelete(id uint64) (string, error) {
 	return sql, nil
 }
 
-func (q *Query) RunQueryWithResults(bath *Bath, sqlString string, parameters []interface{}) ([]map[string]interface{}, error) {
+func (q *Query) RunQueryWithResults(db *sql.DB, sqlString string, parameters []interface{}) ([]map[string]interface{}, error) {
 	allRows := make([]map[string]interface{}, 0, 0)
 	log.Printf("SQL: %s %#v", sqlString, parameters)
-	c := bath.GetConnection()
-	db := c.GetDB()
-	defer c.Release()
+
 	res, err := db.Query(sqlString, parameters...)
 	if err != nil {
 		return allRows, err
@@ -293,8 +291,8 @@ func (q *Query) RunQueryWithResults(bath *Bath, sqlString string, parameters []i
 	return allRows, nil
 }
 
-func (q *Query) RunQueryWithSingleResult(bath *Bath, sqlString string, parameters []interface{}) (map[string]interface{}, error) {
-	allRows, err := q.RunQueryWithResults(bath, sqlString, parameters)
+func (q *Query) RunQueryWithSingleResult(db *sql.DB, sqlString string, parameters []interface{}) (map[string]interface{}, error) {
+	allRows, err := q.RunQueryWithResults(db, sqlString, parameters)
 	if err != nil {
 		return make(map[string]interface{}), err
 	}

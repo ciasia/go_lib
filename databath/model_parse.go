@@ -135,6 +135,8 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 					fieldName = fieldName[1:]
 				}
 
+				fieldName = strings.Split(fieldName, " ")[0]
+
 				customField, ok := customFields[fieldName]
 				if ok {
 					fieldSetDefs[i] = customField

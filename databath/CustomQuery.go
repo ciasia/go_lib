@@ -1,7 +1,7 @@
 package databath
 
 import (
-	"log"
+	"database/sql"
 )
 
 type CustomQuery struct {
@@ -11,7 +11,7 @@ type CustomQuery struct {
 	Type      string
 }
 
-func (cq *CustomQuery) Run(bath *Bath, inFields []interface{}) ([]map[string]interface{}, error) {
+func (cq *CustomQuery) Run(db *sql.DB, inFields []interface{}) ([]map[string]interface{}, error) {
 	allRows := make([]map[string]interface{}, 0, 0)
 	if len(inFields) != len(cq.InFields) {
 		return allRows, UserErrorF("Could not run query, got %d parameters, expected %d", len(inFields), len(cq.InFields))
@@ -31,11 +31,6 @@ func (cq *CustomQuery) Run(bath *Bath, inFields []interface{}) ([]map[string]int
 		return r
 	}
 	sqlString := re_questionmark.ReplaceAllStringFunc(cq.Query, replacer)
-
-	log.Println("SQL: " + sqlString)
-	c := bath.GetConnection()
-	db := c.GetDB()
-	defer c.Release()
 
 	if cq.Type == "exec" {
 		res, err := db.Exec(sqlString)

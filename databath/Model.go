@@ -1,6 +1,7 @@
 package databath
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"strings"
@@ -12,7 +13,7 @@ type Model struct {
 	DynamicFunctions map[string]*DynamicFunction
 }
 
-func (m *Model) GetIdentityString(bath *Bath, collectionName string, pk uint64) (string, error) {
+func (m *Model) GetIdentityString(db *sql.DB, collectionName string, pk uint64) (string, error) {
 	fs := "identity"
 	var lim int64 = 1
 	qc := QueryConditions{
@@ -32,7 +33,7 @@ func (m *Model) GetIdentityString(bath *Bath, collectionName string, pk uint64) 
 		log.Println(err)
 		return "", err
 	}
-	res, err := q.RunQueryWithSingleResult(bath, sql, parameters)
+	res, err := q.RunQueryWithSingleResult(db, sql, parameters)
 	if err != nil {
 		log.Println(err)
 		return "", err

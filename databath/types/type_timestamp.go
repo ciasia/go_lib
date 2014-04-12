@@ -18,7 +18,7 @@ func (f *FieldTimestamp) GetMysqlDef() string {
 	def := "TIMESTAMP"
 
 	if f.OnCreate {
-		def += " CURRENT_TIMESTAMP"
+		def += " DEFAULT CURRENT_TIMESTAMP"
 	}
 	if f.OnUpdate {
 		def += " ON UPDATE CURRENT_TIMESTAMP"
@@ -32,7 +32,18 @@ func (f *FieldTimestamp) GetMysqlDef() string {
 
 func (f *FieldTimestamp) IsSearchable() bool { return false }
 
-func (f *FieldTimestamp) Init(raw map[string]interface{}) error { return nil }
+func (f *FieldTimestamp) Init(raw map[string]interface{}) error {
+
+	_, t := raw["onCreate"]
+	if t {
+		f.OnCreate = true
+	}
+	_, t = raw["onUpdate"]
+	if t {
+		f.OnUpdate = true
+	}
+	return nil
+}
 
 func (f *FieldTimestamp) FromDb(stored interface{}) (interface{}, error) {
 	// Int64 -> Int64
