@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -23,10 +24,11 @@ type rawModel struct {
 }
 
 type rawCollection struct {
-	Fields         map[string]map[string]interface{} `json:"fields"`
-	FieldSets      map[string][]string               `json:"fieldsets"`
-	CustomFields   map[string]interface{}            `json:"custom"`
-	SearchPrefixes map[string]*rawSearchPrefix       `json:"searchPrefixes"`
+	Fields         map[string]map[string]interface{}   `json:"fields"`
+	FieldSets      map[string][]string                 `json:"fieldsets"`
+	CustomFields   map[string]interface{}              `json:"custom"`
+	SearchPrefixes map[string]*rawSearchPrefix         `json:"searchPrefixes"`
+	Masks          map[string]map[string][]interface{} `json:"masks"`
 }
 type rawCustomQuery struct {
 	Query     string                            `json:"query"`
@@ -169,6 +171,60 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 			searchPrefixes[prefixStr] = &prefix
 		}
 
+		masks := map[uint64]*Mask{}
+
+		for users, rawMask := range rawCollection.Masks {
+
+			r, rok := rawMask["read"]
+			w, wok := rawMask["write"]
+
+			mask := &Mask{}
+			if rok {
+				mask.Read = make([]string, len(r), len(r))
+				for i, name := range r {
+					str, ok := name.(string)
+					if !ok {
+						return nil, ParseErrF("Mask fieldset name not string")
+					}
+					mask.Read[i] = str
+				}
+			}
+			if wok {
+				mask.Write = make([]string, len(r), len(r))
+				for i, name := range w {
+					str, ok := name.(string)
+					if !ok {
+						return nil, ParseErrF("Mask fieldset name not string")
+					}
+					mask.Write[i] = str
+				}
+			}
+
+			for _, uPart := range strings.Split(users, ",") {
+				subUParts := strings.Split(uPart, "-")
+				switch len(subUParts) {
+				case 1:
+					asInt, err := strconv.ParseUint(subUParts[0], 10, 64)
+					if err != nil {
+						return nil, ParseErrF("Mask identifier invalid %s", uPart)
+					}
+					masks[asInt] = mask
+
+				case 2:
+					asIntFrom, err1 := strconv.ParseUint(subUParts[0], 10, 64)
+					asIntTo, err2 := strconv.ParseUint(subUParts[0], 10, 64)
+					if err1 != nil || err2 != nil || asIntFrom > asIntTo {
+						return nil, ParseErrF("Mask identifier invalid %s", uPart)
+					}
+
+					for i := asIntFrom; i <= asIntTo; i++ {
+						masks[i] = mask
+					}
+
+				}
+			}
+		}
+
 		collection := Collection{
 			Fields:         fields,
 			FieldSets:      fieldSets,
@@ -176,6 +232,7 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 			ForeignKeys:    make([]*Field, 0, 0),
 			CustomFields:   customFields,
 			SearchPrefixes: searchPrefixes,
+			Masks:          masks,
 		}
 		collections[collectionName] = &collection
 	}

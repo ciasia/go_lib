@@ -13,6 +13,7 @@ type Collection struct {
 	Fields         map[string]*Field
 	FieldSets      map[string][]FieldSetFieldDef
 	CustomFields   map[string]FieldSetFieldDef
+	Masks          map[uint64]*Mask
 	ForeignKeys    []*Field
 	Hooks          []Hook
 	TableName      string

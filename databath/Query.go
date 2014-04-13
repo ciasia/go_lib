@@ -24,7 +24,7 @@ type Query struct {
 	context      Context
 }
 
-func GetQuery(context Context, model *Model, conditions *QueryConditions) (*Query, error) {
+func GetQuery(context Context, model *Model, conditions *QueryConditions, isWrite bool) (*Query, error) {
 	collection, ok := model.Collections[conditions.collection]
 	if !ok {
 		return nil, QueryUserError{"No collection named " + conditions.collection}
@@ -33,6 +33,42 @@ func GetQuery(context Context, model *Model, conditions *QueryConditions) (*Quer
 	fieldList, err := collection.GetFieldSet(conditions.fieldset)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(collection.Masks) > 0 {
+		isApplication, userLevel := context.getUserLevel()
+		if !isApplication {
+			mask, ok := collection.Masks[userLevel]
+			if !ok {
+				return nil, UserErrorF("User level %d does not have access to any fieldsets in %s", userLevel, collection.TableName)
+			}
+			var fieldsets []string
+			if isWrite {
+				fieldsets = mask.Write
+			} else {
+				fieldsets = mask.Read
+			}
+
+			found := false
+
+			for _, fs := range fieldsets {
+				if fs == "*" {
+					found = true
+					break
+				}
+				if fs == *conditions.fieldset {
+					found = true
+					break
+				}
+			}
+			if !found {
+				action := "read"
+				if isWrite {
+					action = "write"
+				}
+				return nil, UserErrorF("User level %d does not have %s access to %s.[%s]", userLevel, action, collection.TableName, *conditions.fieldset)
+			}
+		}
 	}
 	query := Query{
 		context:    context,

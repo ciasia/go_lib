@@ -22,8 +22,10 @@ func (m *Model) GetIdentityString(db *sql.DB, collectionName string, pk uint64) 
 		pk:         &pk,
 		limit:      &lim,
 	}
-	context := MapContext{}
-	q, err := GetQuery(&context, m, &qc)
+	context := MapContext{
+		IsApplication: true,
+	}
+	q, err := GetQuery(&context, m, &qc, false)
 	if err != nil {
 		log.Println(err)
 		return "", err
