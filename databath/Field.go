@@ -58,6 +58,8 @@ func FieldByType(typeString string) (FieldType, error) {
 		return &types.FieldString{}, nil
 	case "id":
 		return &types.FieldId{}, nil
+	case "ref_id":
+		return &types.FieldId{}, nil
 	case "ref":
 		return &types.FieldRef{}, nil
 	case "array":
@@ -72,6 +74,12 @@ func FieldByType(typeString string) (FieldType, error) {
 		return &types.FieldBool{}, nil
 	case "text":
 		return &types.FieldText{}, nil
+	case "keyval":
+		return &types.FieldText{}, nil
+	case "object":
+		return &types.FieldText{}, nil
+	case "???":
+		return &types.FieldString{}, nil
 	case "address":
 		return &types.FieldText{}, nil
 	case "float":

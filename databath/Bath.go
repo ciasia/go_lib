@@ -2,7 +2,7 @@ package databath
 
 import (
 	"database/sql"
-	"log"
+	//"log"
 )
 
 type Bath struct {
@@ -25,7 +25,7 @@ func (bath *Bath) Connect() (*sql.DB, error) {
 
 func (bath *Bath) GetConnection() *Connection {
 	c := <-bath.conn
-	log.Println("GET CONNECTION")
+	//log.Println("GET CONNECTION")
 	return c
 }
 
@@ -43,7 +43,7 @@ func (c *Connection) GetDB() *sql.DB {
 }
 
 func (c *Connection) Release() {
-	log.Println("RELEASE CONNECTION")
+	//log.Println("RELEASE CONNECTION")
 	c.bath.ReleaseConnection(c)
 }
 

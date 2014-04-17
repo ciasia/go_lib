@@ -27,6 +27,10 @@ func (f *FieldTimestamp) GetMysqlDef() string {
 	if def == "TIMESTAMP" {
 		def = "TIMESTAMP NULL"
 	}
+
+	if def == "TIMESTAMP DEFAULT CURRENT_TIMESTAMP" {
+		def = "TIMESTAMP NOT NULL"
+	}
 	return def
 }
 
