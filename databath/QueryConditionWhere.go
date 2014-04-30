@@ -37,7 +37,7 @@ func (qc *QueryConditionWhere) GetConditionString(q *Query) (queryString string,
 	}
 
 	valString, ok := qc.Val.(string)
-	if ok && len(valString) > 2 && valString[0:1] == "#" {
+	if ok && strings.HasPrefix(valString, "#") {
 		paramName := valString[1:]
 		qc.Val = q.context.getValueFor(paramName)
 	}

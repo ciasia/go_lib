@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/daemonl/go_lib/databath/types"
+	//"strings"
 )
 
 type Field struct {
@@ -24,11 +25,20 @@ func (f *Field) Init(raw map[string]interface{}) error {
 	return err
 }
 
-func (f *Field) FromDb(raw interface{}) (interface{}, error)           { return f.Impl.FromDb(raw) }
-func (f *Field) ToDb(raw interface{}, context Context) (string, error) { return f.Impl.ToDb(raw) }
-func (f *Field) GetScanReciever() interface{}                          { return f.Impl.GetScanReciever() }
-func (f *Field) IsSearchable() bool                                    { return f.Impl.IsSearchable() }
-func (f *Field) GetMysqlDef() string                                   { return f.Impl.GetMysqlDef() }
+func (f *Field) FromDb(raw interface{}) (interface{}, error) { return f.Impl.FromDb(raw) }
+func (f *Field) ToDb(raw interface{}, context Context) (string, error) {
+	/*
+		strVal, ok := raw.(string)
+		if ok {
+			if strings.HasPrefix(strVal, "#") {
+				raw = context.getValueFor(strVal)
+			}
+		}*/
+	return f.Impl.ToDb(raw)
+}
+func (f *Field) GetScanReciever() interface{} { return f.Impl.GetScanReciever() }
+func (f *Field) IsSearchable() bool           { return f.Impl.IsSearchable() }
+func (f *Field) GetMysqlDef() string          { return f.Impl.GetMysqlDef() }
 
 func (f *Field) GetDefault(context Context) (string, error) {
 	if f.OnCreate == nil {
