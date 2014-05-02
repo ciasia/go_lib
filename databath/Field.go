@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/daemonl/go_lib/databath/types"
-	//"strings"
+	"strings"
 )
 
 type Field struct {
@@ -46,8 +46,9 @@ func (f *Field) GetDefault(context Context) (string, error) {
 	}
 
 	strVal, isStr := (*f.OnCreate).(string)
-	if isStr {
-		val := context.getValueFor(strVal)
+	if isStr && strings.HasPrefix(strVal, "#") {
+		val := context.getValueFor(strVal[1:])
+		//fmt.Sprintf("##################%s  %s  %s\n\n\n", strVal, strVal[1:], val)
 		return f.Impl.ToDb(val)
 	}
 	return f.Impl.ToDb(*f.OnCreate)
