@@ -51,21 +51,29 @@ func (f *FieldTimestamp) Init(raw map[string]interface{}) error {
 
 func (f *FieldTimestamp) FromDb(stored interface{}) (interface{}, error) {
 	// Int64 -> Int64
-	storedInt, ok := stored.(*int64)
+	storedString, ok := stored.(*string)
 	if !ok {
-		return nil, MakeFromDbErrorFromString("Incorrect Type in DB (expected int64)")
+		return nil, MakeFromDbErrorFromString("Incorrect Type in DB (expected string)")
 	}
-	if storedInt == nil {
+	if storedString == nil {
 		return nil, nil
 	}
-	return *storedInt, nil
+	if *storedString == "0000-00-00 00:00:00" {
+		return 0, nil
+	}
+	d, err := time.Parse("2006-01-02 15:04:05", *storedString)
+	if err != nil {
+		return nil, err
+	}
+	i := d.Unix()
+	return i, nil
 }
+
 func (f *FieldTimestamp) ToDb(input interface{}) (string, error) {
 	// Int64 -> Int64
 	switch input := input.(type) {
 	case string:
 		if strings.HasPrefix(input, "#now") {
-
 			t := time.Now().Unix()
 			return f.ToDb(t)
 		}
@@ -76,8 +84,11 @@ func (f *FieldTimestamp) ToDb(input interface{}) (string, error) {
 		}
 		return f.ToDb(i)
 
-	case uint64, uint32, int, int32, int64:
-		return fmt.Sprintf("%d", input), nil
+	case int64:
+		i := int64(input)
+		d := time.Unix(i, 0)
+
+		return d.Format("2006-01-02 15:04:05"), nil
 
 	case float64:
 		if math.Mod(input, 1) != 0 {
@@ -104,7 +115,7 @@ func (f *FieldTimestamp) ToDb(input interface{}) (string, error) {
 	return fmt.Sprintf("%d", inputInt), nil
 }
 func (f *FieldTimestamp) GetScanReciever() interface{} {
-	var v int64
-	var vp *int64 = &v
+	var v string
+	var vp *string = &v
 	return &vp
 }
