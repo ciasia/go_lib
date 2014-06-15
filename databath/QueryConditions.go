@@ -14,6 +14,14 @@ type QueryConditions struct {
 	search     map[string]string
 }
 
+func (qc *QueryConditions) CollectionName() string {
+	return qc.collection
+}
+
+func (qc *QueryConditions) AndWhere(extraCondition QueryCondition) {
+	qc.where = append(qc.where, extraCondition)
+}
+
 type QueryCondition interface {
 	GetConditionString(q *Query) (string, []interface{}, bool, error)
 }
