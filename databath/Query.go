@@ -315,6 +315,7 @@ func (q *Query) RunQueryWithResults(db *sql.DB, sqlString string, parameters []i
 	if err != nil {
 		return allRows, err
 	}
+	defer res.Close()
 
 	for res.Next() {
 		converted, err := q.ConvertResultRow(res)

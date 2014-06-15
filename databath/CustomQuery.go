@@ -59,6 +59,7 @@ func (cq *CustomQuery) Run(db *sql.DB, inFields []interface{}) ([]map[string]int
 		if err != nil {
 			return allRows, err
 		}
+		defer res.Close()
 
 		sqlColumns, _ := res.Columns()
 

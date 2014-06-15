@@ -30,7 +30,7 @@ func (c *Collection) GetFieldSet(fieldSetNamePointer *string) ([]FieldSetFieldDe
 
 	fields, ok := c.FieldSets[fieldSetName]
 	if !ok {
-		return nil, QueryUserError{"Fieldset " + fieldSetName + " doesn't exist"}
+		return nil, QueryUserError{"Fieldset " + fieldSetName + " doesn't exist in " + c.TableName}
 	}
 	log.Printf("Using fieldset: %s.%s\n", c.TableName, fieldSetName)
 
@@ -59,6 +59,7 @@ func (c *Collection) CheckDelete(db *sql.DB, id uint64) (*DeleteCheckResult, err
 		if err != nil {
 			return nil, err
 		}
+		defer res.Close()
 		existingRefs := make([]uint64, 0, 0)
 		for res.Next() {
 			var refId uint64

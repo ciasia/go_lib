@@ -44,7 +44,7 @@ func (c *Connection) GetDB() *sql.DB {
 
 func (c *Connection) Release() {
 	//log.Println("RELEASE CONNECTION")
-	c.bath.ReleaseConnection(c)
+	go c.bath.ReleaseConnection(c)
 }
 
 func RunABath(driverName string, connectionString string, size int) *Bath {
