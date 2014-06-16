@@ -29,11 +29,11 @@ func getFieldSetFieldDef(name string, raw interface{}) (FieldSetFieldDef, error)
 	if isMap {
 		fdTypeRaw, ok := mapVals["type"]
 		if !ok {
-			return nil, errors.New("Fieldset was a map without a 'type' key, couldn't be resolved")
+			return nil, fmt.Errorf("Field %s was a map without a 'type' key, couldn't be resolved", name)
 		}
 		fdType, ok := fdTypeRaw.(string)
 		if !ok {
-			return nil, errors.New("Fieldset had non string 'type' key")
+			return nil, fmt.Errorf("Field %s had non string 'type' key", name)
 		}
 		var fsfd FieldSetFieldDef
 		switch fdType {
@@ -50,6 +50,8 @@ func getFieldSetFieldDef(name string, raw interface{}) (FieldSetFieldDef, error)
 			return nil, errors.New("Fieldset type " + fdType + " couldn't be resolved")
 		}
 
+		mapVals["path"] = name
+
 		fsfdVal := reflect.Indirect(reflect.ValueOf(fsfd)).Type()
 		fsfdElem := reflect.ValueOf(fsfd).Elem()
 		var field reflect.StructField
@@ -60,7 +62,7 @@ func getFieldSetFieldDef(name string, raw interface{}) (FieldSetFieldDef, error)
 			field = fsfdVal.Field(i) // reflect.StructField
 			//log.Printf("FIELD TYPE: %v %v", field.Type, field.Type.Kind())
 
-			if tag := field.Tag.Get("json"); tag != "" {
+			if tag := field.Tag.Get("json"); tag != "" && tag != "-" {
 				// The field has a json tag.
 				mapVal, mapValExists := mapVals[tag]
 

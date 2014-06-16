@@ -99,6 +99,7 @@ func ReadModelFromReader(modelReader io.ReadCloser) (*Model, error) {
 		for name, rawCustomField := range rawCollection.CustomFields {
 			fsfd, err := getFieldSetFieldDef(name, rawCustomField)
 			if err != nil {
+				err = fmt.Errorf("in collection %s: %s", collectionName, err.Error())
 				log.Printf(err.Error())
 				return nil, err
 			}
