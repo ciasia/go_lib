@@ -11,6 +11,7 @@ type FieldSetFieldDefRaw struct {
 	DataType string  `json:"dataType"`
 	Path     string  `json:"path"`
 	Join     *string `json:"join"`
+	SearchOn *string `json:"searchOn"`
 }
 
 func (f *FieldSetFieldDefRaw) init() error { return nil }

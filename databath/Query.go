@@ -630,8 +630,11 @@ func (q *Query) makeWhereString(conditions *QueryConditions) (whereString string
 					returnErr = err
 					return //BAD
 				}
-				strCondition := QueryConditionString{Str: joined, Parameters: joinedParameters}
-				conditions.where = append(conditions.where, &strCondition)
+				if len(joined) > 0 {
+					strCondition := QueryConditionString{Str: joined, Parameters: joinedParameters}
+					conditions.where = append(conditions.where, &strCondition)
+				}
+
 			}
 
 		}

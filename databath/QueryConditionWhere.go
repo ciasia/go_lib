@@ -27,11 +27,19 @@ func (qc *QueryConditionWhere) GetConditionString(q *Query) (queryString string,
 		return //BAD
 	}
 
-	_, isFsFdNormal := field.fieldSetFieldDef.(*FieldSetFieldDefNormal)
-	if isFsFdNormal {
+	switch f := field.fieldSetFieldDef.(type) {
+	case *FieldSetFieldDefNormal:
 		isAggregate = false
 		queryUsingName = fmt.Sprintf("`%s`.`%s`", field.table.alias, field.fieldNameInTable)
-	} else {
+	case *FieldSetFieldDefRaw:
+		if f.SearchOn != nil {
+			isAggregate = false
+			queryUsingName = field.table.alias + "." + *f.SearchOn
+		} else {
+			isAggregate = true
+			queryUsingName = field.alias
+		}
+	default:
 		isAggregate = true
 		queryUsingName = field.alias
 	}
