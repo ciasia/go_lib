@@ -24,7 +24,8 @@ type OAuthConfig struct {
 	OpenidRealm             string `json:"openid_realm"`
 }
 type OAuthHandler struct {
-	Config *OAuthConfig
+	Config      *OAuthConfig
+	LoginLogout torch.LoginLogout
 }
 
 type createAuthUrlRequest struct {
@@ -71,9 +72,9 @@ type oauthVerifyRequest struct {
 	ReturnOauthToken bool   `json:"returnOauthToken"`
 }
 
-func (oa *OAuthHandler) OauthResponse(requestTorch *torch.Request) {
+func (oa *OAuthHandler) OauthResponse(request torch.Request) {
 
-	_, r := requestTorch.GetRaw()
+	_, r := request.GetRaw()
 
 	endpoint := "https://www.googleapis.com/identitytoolkit/v1/relyingparty/verifyAssertion?key=" + oa.Config.Key
 
@@ -88,8 +89,8 @@ func (oa *OAuthHandler) OauthResponse(requestTorch *torch.Request) {
 	resp, err := http.Post(endpoint, "application/json", bodyReader)
 	if err != nil {
 		log.Println(err)
-		requestTorch.Session.AddFlash("error", "An error occurred when communicating with the Google server")
-		requestTorch.Redirect("/login")
+		request.Session().AddFlash("error", "An error occurred when communicating with the Google server")
+		request.Redirect("/login")
 		return
 	}
 
@@ -97,8 +98,8 @@ func (oa *OAuthHandler) OauthResponse(requestTorch *torch.Request) {
 		log.Println(resp)
 		bs, _ := ioutil.ReadAll(resp.Body)
 		log.Println(string(bs))
-		requestTorch.Session.AddFlash("error", "An error occurred when communicating with the Google server")
-		requestTorch.Redirect("/login")
+		request.Session().AddFlash("error", "An error occurred when communicating with the Google server")
+		request.Redirect("/login")
 		return
 	}
 
@@ -106,9 +107,9 @@ func (oa *OAuthHandler) OauthResponse(requestTorch *torch.Request) {
 	unm := json.NewDecoder(resp.Body)
 	unm.Decode(&authResp)
 	log.Printf("OAUTH RESP: %#v\n", authResp)
-	torch.ForceLogin(requestTorch, authResp.VerifiedEmail)
+	oa.LoginLogout.ForceLogin(request, authResp.VerifiedEmail)
 }
-func (oa *OAuthHandler) OauthRequest(requestTorch *torch.Request) {
+func (oa *OAuthHandler) OauthRequest(request torch.Request) {
 
 	endpoint := "https://www.googleapis.com/identitytoolkit/v1/relyingparty/createAuthUrl?key=" + oa.Config.Key
 
@@ -127,21 +128,21 @@ func (oa *OAuthHandler) OauthRequest(requestTorch *torch.Request) {
 	resp, err := http.Post(endpoint, "application/json", bodyReader)
 	if err != nil {
 		log.Println(err)
-		requestTorch.Session.AddFlash("error", "An error occurred when communicating with the Google server")
-		requestTorch.Redirect("/login")
+		request.Session().AddFlash("error", "An error occurred when communicating with the Google server")
+		request.Redirect("/login")
 		return
 	}
 
 	if resp.StatusCode != 200 {
 		log.Println(resp.StatusCode)
-		requestTorch.Session.AddFlash("error", "An error occurred when communicating with the Google server")
-		requestTorch.Redirect("/login")
+		request.Session().AddFlash("error", "An error occurred when communicating with the Google server")
+		request.Redirect("/login")
 		return
 	}
 
 	authResp := createAuthUrlResponse{}
 	unm := json.NewDecoder(resp.Body)
 	unm.Decode(&authResp)
-	requestTorch.Redirect(authResp.AuthUri)
+	request.Redirect(authResp.AuthUri)
 	return
 }
