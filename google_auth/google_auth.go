@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 
-	"github.com/daemonl/go_gsd/torch"
+	"github.com/daemonl/go_gsd/shared"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -25,7 +25,7 @@ type OAuthConfig struct {
 }
 type OAuthHandler struct {
 	Config      *OAuthConfig
-	LoginLogout torch.LoginLogout
+	LoginLogout shared.ILoginLogout
 }
 
 type createAuthUrlRequest struct {
@@ -72,7 +72,7 @@ type oauthVerifyRequest struct {
 	ReturnOauthToken bool   `json:"returnOauthToken"`
 }
 
-func (oa *OAuthHandler) OauthResponse(request torch.Request) {
+func (oa *OAuthHandler) OauthResponse(request shared.IRequest) {
 
 	_, r := request.GetRaw()
 
@@ -109,7 +109,7 @@ func (oa *OAuthHandler) OauthResponse(request torch.Request) {
 	log.Printf("OAUTH RESP: %#v\n", authResp)
 	oa.LoginLogout.ForceLogin(request, authResp.VerifiedEmail)
 }
-func (oa *OAuthHandler) OauthRequest(request torch.Request) {
+func (oa *OAuthHandler) OauthRequest(request shared.IRequest) {
 
 	endpoint := "https://www.googleapis.com/identitytoolkit/v1/relyingparty/createAuthUrl?key=" + oa.Config.Key
 
