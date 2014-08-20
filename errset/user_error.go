@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 )
 
 type ErrorSet struct {
@@ -12,6 +13,18 @@ type ErrorSet struct {
 	userErrors []string
 	parentSet  *ErrorSet
 	childSets  []*ErrorSet
+}
+
+func (s *ErrorSet) Error() string {
+	return "There were errors in the request"
+}
+
+func (s *ErrorSet) GetHTTPStatus() int {
+	return http.StatusBadRequest
+}
+
+func (s *ErrorSet) GetUserObject() interface{} {
+	return s.GetErrors()
 }
 
 func (s *ErrorSet) parentAppendError(err error) {
