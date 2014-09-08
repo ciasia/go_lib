@@ -68,7 +68,9 @@ func (db *DB) Get(dest interface{}, query string, args ...interface{}) error {
 	if !rows.Next() {
 		return &NotFoundErr{}
 	}
-	return db.scanRow(rows, dest)
+	err = db.scanRow(rows, dest)
+	rows.Close()
+	return err
 }
 
 func (db *DB) scanRow(rows *sql.Rows, dest interface{}) error {
