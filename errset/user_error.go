@@ -9,10 +9,11 @@ import (
 )
 
 type ErrorSet struct {
-	errors     []error
-	userErrors []string
-	parentSet  *ErrorSet
-	childSets  []*ErrorSet
+	errors        []error
+	childHasError bool
+	userErrors    []string
+	parentSet     *ErrorSet
+	childSets     []*ErrorSet
 }
 
 func (s *ErrorSet) Error() string {
@@ -24,17 +25,21 @@ func (s *ErrorSet) GetHTTPStatus() int {
 }
 
 func (s *ErrorSet) GetUserObject() interface{} {
-	return s.GetErrors()
+	return map[string]interface{}{
+		"errors": s.GetErrors(),
+	}
 }
 
 func (s *ErrorSet) parentAppendError(err error) {
 	if s.parentSet != nil {
-		s.parentSet.AddDirect(err)
+		s.parentSet.childHasError = true
+		//s.parentSet.AddDirect(err)
 	}
 }
 func (s *ErrorSet) parentAppendUser(err string) {
 	if s.parentSet != nil {
-		s.parentSet.AddUser(err)
+		s.parentSet.childHasError = true
+		//s.parentSet.AddUser(err)
 	}
 
 }
@@ -77,7 +82,7 @@ func (s *ErrorSet) AddDirect(err error) {
 }
 
 func (s *ErrorSet) HasErrors() bool {
-	if len(s.errors) > 0 || len(s.userErrors) > 0 {
+	if s.childHasError || len(s.errors) > 0 || len(s.userErrors) > 0 {
 		return true
 	}
 	return false

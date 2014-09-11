@@ -61,11 +61,13 @@ func (db *DB) Select(dest interface{}, query string, args ...interface{}) error 
 }
 
 func (db *DB) Get(dest interface{}, query string, args ...interface{}) error {
+	fmt.Printf("Q: %s\n%v\n", query, args)
 	rows, err := db.raw.Query(query, args...)
 	if err != nil {
 		return err
 	}
 	if !rows.Next() {
+		fmt.Println("NOT FOUND")
 		return &NotFoundErr{}
 	}
 	err = db.scanRow(rows, dest)
