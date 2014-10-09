@@ -47,15 +47,16 @@ func (s *ErrorSet) Add(err error) {
 	if err != nil {
 		s.errors = append(s.errors, err)
 		s.parentAppendError(err)
-		log.Println(err)
+		log.Println(err.Error())
 	}
 }
 
 func (s *ErrorSet) AddUserIf(err error, user string) {
 	if err != nil {
+
 		s.errors = append(s.errors, err)
 		s.parentAppendError(err)
-		log.Println(err)
+		log.Println(err.Error())
 		s.userErrors = append(s.userErrors, user)
 		s.parentAppendUser(user)
 	}
