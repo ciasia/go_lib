@@ -33,11 +33,12 @@ func (db *DB) QueryRow(query string, args ...interface{}) *sql.Row {
 }
 
 func (db *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
+	fmt.Printf("Q: %s\n%v\n", query, args)
 	return db.raw.Exec(query, args...)
 }
 
 func (db *DB) Select(dest interface{}, query string, args ...interface{}) error {
-	
+
 	rows, err := db.raw.Query(query, args...)
 	if err != nil {
 		return err
