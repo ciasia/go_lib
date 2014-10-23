@@ -25,19 +25,19 @@ type DB struct {
 }
 
 func (db *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	return db.raw.Query(query, args)
+	return db.raw.Query(query, args...)
 }
 
 func (db *DB) QueryRow(query string, args ...interface{}) *sql.Row {
-	return db.raw.QueryRow(query, args)
+	return db.raw.QueryRow(query, args...)
 }
 
 func (db *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
-	return db.raw.Exec(query, args)
+	return db.raw.Exec(query, args...)
 }
 
 func (db *DB) Select(dest interface{}, query string, args ...interface{}) error {
-
+	
 	rows, err := db.raw.Query(query, args...)
 	if err != nil {
 		return err
