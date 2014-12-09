@@ -43,6 +43,7 @@ func (db *DB) Select(dest interface{}, query string, args ...interface{}) error 
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
 
 	dVal := reflect.ValueOf(dest).Elem()
 	rowType := reflect.TypeOf(dest).Elem().Elem().Elem()
@@ -69,6 +70,7 @@ func (db *DB) Get(dest interface{}, query string, args ...interface{}) error {
 	}
 	if !rows.Next() {
 		fmt.Println("NOT FOUND")
+		rows.Close()
 		return &NotFoundErr{}
 	}
 	err = db.scanRow(rows, dest)
