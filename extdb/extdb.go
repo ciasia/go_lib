@@ -47,17 +47,18 @@ func (db *DB) Select(dest interface{}, query string, args ...interface{}) error 
 
 	dVal := reflect.ValueOf(dest).Elem()
 	rowType := reflect.TypeOf(dest).Elem().Elem().Elem()
-
+	r := 0
 	for rows.Next() {
 		rowVal := reflect.New(rowType)
 		var rowInterface interface{} = rowVal.Interface()
 
 		err := db.scanRow(rows, rowInterface)
 		if err != nil {
-			return err
+			return fmt.Errorf("Scan error for statement '%s' row %d: %s", query, r, err)
 		}
 
 		dVal.Set(reflect.Append(dVal, rowVal))
+		r++
 	}
 	return nil
 }
