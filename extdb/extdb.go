@@ -64,7 +64,7 @@ func (db *DB) Select(dest interface{}, query string, args ...interface{}) error 
 }
 
 func (db *DB) Get(dest interface{}, query string, args ...interface{}) error {
-	fmt.Printf("Q: %s\n%v\n", query, args)
+	//fmt.Printf("Q: %s\n%v\n", query, args)
 	rows, err := db.raw.Query(query, args...)
 	if err != nil {
 		return err
