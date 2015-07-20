@@ -37,6 +37,18 @@ func (db *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
 	return db.raw.Exec(query, args...)
 }
 
+func (db *DB) Insert(query string, args ...interface{}) (uint64, error) {
+	res, err := db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	lastInsert, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return uint64(lastInsert), nil
+}
+
 func (db *DB) Select(dest interface{}, query string, args ...interface{}) error {
 
 	rows, err := db.raw.Query(query, args...)
